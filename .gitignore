@@ -1,0 +1,24 @@
+# Generated output and IDE state
+**/bin/
+**/obj/
+artifacts/
+.vs/
+.idea/
+*.user
+*.suo
+*.log
+
+# Local configuration, credentials and runtime profiles
+.env*
+!.env.example
+*.secret
+*.pfx
+*.p12
+*.pem
+*.key
+**/accounts/
+**/voice-sessions/
+**/data.json
+**/auth.json
+**/oauth_creds.json
+**/*oauth-token*
