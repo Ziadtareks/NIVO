@@ -1,8 +1,16 @@
 # Verification — 2026-11-26
 
-Status: version 1.8.0 connected-account Talk routing and external native Antigravity voice; overall reference parity work remains in progress; see [PARITY.md](PARITY.md).
+Status: version 1.9.0 standalone Windows EXE and opt-in startup; overall reference parity work remains in progress; see [PARITY.md](PARITY.md).
 
 ## Build and local checks
+
+### Version 1.9.0 — standalone download and Windows startup
+
+The GitHub release supplies one self-contained Windows x64 `NIVO.exe`, including .NET and native dependencies. Third-party license texts are embedded. The README starts with the direct download and ordinary usage, without development/build instructions.
+
+Settings → Desktop exposes a Start NIVO with Windows toggle. It creates/removes only the current user's `NIVO.lnk` Startup shortcut and requires no elevation. Windows Startup state is the source of truth; unrelated preferences saves do not change it. The shortcut stores the exact current executable and working folder, with no additional arguments. Tests create real `.lnk` files only in isolated temporary folders, cover spaces in paths and safe removal, and render the toggle in Arabic and English.
+
+Regression testing also exposed a transient Windows lock during native voice-session cleanup. Cleanup now retries only sharing/lock/directory-not-empty IO errors with bounded delays, preserving the exact temporary-path and junction protections. A synthetic locked-file check and repeated immediate start/stop checks cover this behavior. Real Windows sign-in/reboot and live physical audio are not exercised. The exact renamed standalone EXE passed all four suites with installed-runtime lookup disabled: accounts/startup 69, assistant 51, computer commands 25, motion 53 (198 total). It also started, responded, exited normally with code 0, and relaunched from the Desktop with no adjacent DLLs or configuration files.
 
 ### Public repository preparation — 2026-11-27
 

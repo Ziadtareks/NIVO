@@ -889,14 +889,22 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
         if (Directory.Exists(junctionPath))
             return;
 
-        try
+        // Windows can keep a terminated process's empty working directory delete-pending briefly.
+        // Retry only transient sharing/lock/directory-not-empty errors; preserve all path/link guards above.
+        for (int attempt = 0; ; attempt++)
         {
-            if (Directory.Exists(sessionDir))
-                Directory.Delete(sessionDir, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Trace.TraceWarning("NIVO Antigravity voice session directory cleanup skipped ({0}).", ex.GetType().Name);
+            try
+            {
+                if (Directory.Exists(sessionDir)) Directory.Delete(sessionDir, recursive: true);
+                return;
+            }
+            catch (IOException ex) when (attempt < 5 && (ex.HResult & 0xffff) is 32 or 33 or 145)
+            { Thread.Sleep(25 * (attempt + 1)); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Trace.TraceWarning("NIVO Antigravity voice session directory cleanup skipped ({0}, 0x{1:X8}).", ex.GetType().Name, ex.HResult);
+                return;
+            }
         }
     }
 

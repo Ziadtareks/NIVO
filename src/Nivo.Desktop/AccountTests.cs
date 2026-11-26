@@ -49,6 +49,8 @@ internal static class AccountTests
     {
         string root = Path.GetFullPath(Path.Combine("artifacts", "accounts-" + DateTime.Now.ToString("yyyyMMdd-HHmmss")));
         Directory.CreateDirectory(root);
+        System.Diagnostics.Trace.Listeners.Add(new System.Diagnostics.TextWriterTraceListener(Path.Combine(root, "trace.txt")));
+        System.Diagnostics.Trace.AutoFlush = true;
         var results = new List<string>();
         void Check(bool condition, string description)
         {
@@ -57,6 +59,21 @@ internal static class AccountTests
         }
         string fixture = Path.GetFullPath("tests/Nivo.FixtureCli/bin/Release/net10.0/Nivo.FixtureCli.exe");
         Check(File.Exists(fixture), "Account protocol fixture is built");
+        string startupFixture = Path.Combine(root, "startup fixture");
+        string portableFixture = Path.Combine(root, "portable app");
+        Directory.CreateDirectory(portableFixture);
+        string startupExecutable = Path.Combine(portableFixture, "NIVO.exe");
+        File.Copy(fixture, startupExecutable);
+        StartupService.SetEnabled(true, startupExecutable, startupFixture);
+        string shortcutFile = Path.Combine(startupFixture, "NIVO.lnk");
+        Check(File.Exists(shortcutFile) && new FileInfo(shortcutFile).Length > 0, "Startup option creates a real current-user-style Windows shortcut without launching the app");
+        object shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+        object shortcut = ((dynamic)shell).CreateShortcut(shortcutFile);
+        try { Check(string.Equals((string)((dynamic)shortcut).TargetPath, startupExecutable, StringComparison.OrdinalIgnoreCase) && (string)((dynamic)shortcut).Arguments == "", "Startup shortcut targets the exact portable executable, including paths with spaces, with no extra arguments"); }
+        finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut); System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell); }
+        string unrelated = Path.Combine(startupFixture, "other-app.txt"); File.WriteAllText(unrelated, "keep");
+        StartupService.SetEnabled(false, startupExecutable, startupFixture);
+        Check(!File.Exists(shortcutFile) && File.ReadAllText(unrelated) == "keep", "Disabling startup removes only NIVO's shortcut and preserves unrelated entries");
         var store = new Store(Path.Combine(root, "profile"));
         store.Data.Settings.CodexCliPath = store.Data.Settings.AntigravityCliPath = fixture;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -275,7 +292,7 @@ internal static class AccountTests
             Environment.SetEnvironmentVariable("NIVO_FIXTURE_VERSION_DELAY", previousDelay);
             Environment.SetEnvironmentVariable("NIVO_FIXTURE_VERSION_PID", previousPid);
         }
-        for (int attempt = 0; attempt < 4; attempt++)
+        for (int attempt = 0; attempt < 8; attempt++)
         {
             using var immediateCancel = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
             var immediateTalk = await AntigravityNativeTalkSession.StartForTestAsync(store, "fixture-text", "No tools", null, false, immediateCancel.Token);
@@ -285,6 +302,16 @@ internal static class AccountTests
             await immediateTalk.DisposeAsync();
         }
         Check(!Directory.GetDirectories(nativeSessions).Any() && File.Exists(preserved), "Repeated immediate start-stop cancellation leaves no monitor, temporary session, or account cleanup race");
+        string retrySession = Path.Combine(nativeSessions, Guid.NewGuid().ToString("N"));
+        string retryJunction = Path.Combine(retrySession, "home", ".gemini", "antigravity-cli");
+        string retryWork = Path.Combine(retrySession, "workspace"); Directory.CreateDirectory(retryWork);
+        string retryFile = Path.Combine(retryWork, "held.tmp"); File.WriteAllText(retryFile, "synthetic");
+        var heldFile = new FileStream(retryFile, FileMode.Open, FileAccess.Read, FileShare.None);
+        var releaseHandle = Task.Run(async () => { await Task.Delay(100); heldFile.Dispose(); });
+        await Task.Run(() => AntigravityNativeTalkSession.SafeCleanupSessionDirectories(retryJunction, retrySession));
+        await releaseHandle;
+        Check(!Directory.Exists(retrySession) && File.Exists(preserved), "Temporary Windows sharing locks are retried during cleanup without touching the account target");
+
         var fakeAudio = new FakeRealtimeAudio();
         var transcripts = new System.Collections.Concurrent.ConcurrentQueue<string>();
         var realtime = await codex.StartRealtimeAsync("fixture-text", "No native tools.", (role, text) => transcripts.Enqueue(role + ":" + text), null,
@@ -358,6 +385,9 @@ internal static class AccountTests
                 language + " Voice settings expose Auto, Codex and Antigravity independently of the text model");
             bitmap = new RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(window); DesktopService.SavePng(bitmap, Path.Combine(root, "voice-" + language + ".png"));
+            window.Navigate("Settings", "Desktop"); window.UpdateLayout();
+            var startupToggle = Descendants<CheckBox>(window).Single(c => Equals(c.Tag, "StartWithWindows"));
+            Check(startupToggle.IsVisible && startupToggle.ActualWidth > 100, language + " Settings expose the Windows startup option");
             window.Hide();
         }
     }

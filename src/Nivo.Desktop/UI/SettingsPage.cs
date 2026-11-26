@@ -472,6 +472,13 @@ public sealed partial class MainWindow
             TwoCol(shortcutFields[2], shortcutFields[3]));
 
         // Tab 4: Desktop
+        bool startupInitiallyEnabled = StartupService.IsEnabled;
+        var startWithWindows = OptionToggle(
+            Loc.T("Start NIVO with Windows", "تشغيل نيڤو مع Windows"),
+            Loc.T("Open NIVO automatically when you sign in. Keep the executable in a permanent folder; turn this off to stop automatic startup.", "يفتح نيڤو تلقائيًا عند تسجيل الدخول. احتفظ بالبرنامج في مجلد ثابت؛ أوقف الخيار لإلغاء التشغيل التلقائي."),
+            startupInitiallyEnabled);
+        startWithWindows.Tag = "StartWithWindows";
+
         var computerAccess = OptionToggle(
             Loc.T("Computer access · Windows commands", "الوصول للجهاز · أوامر Windows"),
             Loc.T("Let normal chat plan PowerShell actions on files, apps and settings. Every command is reviewed before it runs; results go to your AI model. Uses this process's Windows rights. Run NIVO as Administrator yourself when required. Incognito does not undo command changes.", "يسمح للمحادثة بتجهيز أوامر PowerShell للملفات والبرامج والإعدادات. تُراجع الأوامر قبل التنفيذ وتُرسل نتائجها للموديل. يستخدم صلاحيات البرنامج الحالية؛ شغّل نيڤو كمسؤول عند الحاجة. الوضع الخفي لا يتراجع عن تغييرات الأوامر."),
@@ -566,6 +573,7 @@ public sealed partial class MainWindow
         excluded.TextChanged += (_, _) => MarkDirty();
 
         tabs["Desktop"] = Ui.Stack(
+            Section(Loc.T("Startup", "بدء التشغيل"), Loc.T("Choose when NIVO opens.", "اختار متى يفتح نيڤو."), startWithWindows),
             Section(Loc.T("Computer access", "الوصول للجهاز"), Loc.T("Execute reviewed Windows actions directly from your conversation.", "نفّذ إجراءات Windows بعد مراجعتها من المحادثة مباشرة."), computerAccess,
                 Notice(Ui.Text(ComputerCommandService.IsAdministrator() ? Loc.T("NIVO is running as Administrator.", "نيڤو يعمل بصلاحيات Administrator.") : Loc.T("NIVO is running with standard user permissions. Windows access checks still apply.", "نيڤو يعمل بصلاحيات المستخدم العادي. قيود Windows ما زالت مطبّقة."), 12, "#9CB3C3"))),
             Section(
@@ -758,6 +766,12 @@ public sealed partial class MainWindow
             if (!string.IsNullOrWhiteSpace(nextFallback)) OpenCodeService.ValidateModel(nextFallback, validation);
             if (!string.IsNullOrWhiteSpace(accountPaths["codex"].Text)) CodexAccountService.FindExecutable(accountPaths["codex"].Text);
             if (!string.IsNullOrWhiteSpace(accountPaths["antigravity"].Text)) AntigravityAccountService.FindExecutable(accountPaths["antigravity"].Text);
+            bool startupRequested = startWithWindows.IsChecked == true;
+            if (startupRequested != startupInitiallyEnabled)
+            {
+                StartupService.SetEnabled(startupRequested);
+                startupInitiallyEnabled = startupRequested;
+            }
             foreach (var shortcut in shortcuts) s.Shortcuts[shortcut.Key] = shortcut.Value.Text;
             s.FollowWindowsAnimations = followWindowsAnimations.IsChecked == true; Motion.FollowWindows = s.FollowWindowsAnimations;
             s.ReduceMotion = reduced.IsChecked == true; Motion.Reduced = s.ReduceMotion; s.Theme = (string)theme.SelectedItem; s.Persona = (string)persona.SelectedItem;
