@@ -70,3 +70,7 @@ Requires **Windows 10 version 2004 or newer, or Windows 11, 64-bit**. AI feature
 History and account profiles stay under `%LOCALAPPDATA%\NIVO.Local`. Prompts and captures go to your selected provider. Computer actions require plan review; stopping them does not undo completed changes.
 
 NIVO is an independent project inspired by AYO's public features. Live voice and physical desktop behavior are still being tested. [Features](docs/FEATURES.md) · [Known limits](docs/VERIFICATION.md) · [Third-party notices](docs/THIRD_PARTY.md)
+
+## License
+
+NIVO is licensed under the [MIT License](LICENSE).
