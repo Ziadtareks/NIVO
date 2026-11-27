@@ -69,7 +69,15 @@ Requires **Windows 10 version 2004 or newer, or Windows 11, 64-bit**. AI feature
 
 History and account profiles stay under `%LOCALAPPDATA%\NIVO.Local`. Prompts and captures go to your selected provider. Computer actions require plan review; stopping them does not undo completed changes.
 
-NIVO is an independent Windows desktop project. Live voice and physical desktop behavior are still being tested. [Features](docs/FEATURES.md) · [Known limits](docs/VERIFICATION.md) · [Third-party notices](docs/THIRD_PARTY.md)
+Live voice and physical desktop behavior are still being tested. [Features](docs/FEATURES.md) · [Known limits](docs/VERIFICATION.md) · [Third-party notices](docs/THIRD_PARTY.md)
+
+## Legal
+
+NIVO is an independent project. It is not affiliated with, endorsed by, or supported by any AI provider or any other desktop companion product.
+
+Provider access and quotas are governed by each provider's own terms.
+
+This product includes software developed by the University of California, Berkeley and its contributors. See [third-party notices](docs/THIRD_PARTY.md) for the applicable component licenses.
 
 ## License
 
