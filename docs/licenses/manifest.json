@@ -1,0 +1,233 @@
+{
+  "auditedDistribution": "NIVO 1.9.0, win-x64, self-contained single-file",
+  "packages": [
+    {
+      "component": "Microsoft.NETCore.App.Runtime.win-x64",
+      "version": "10.0.13",
+      "kind": "runtimepack",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/dotnet/dotnet",
+        "commit": "4099f83977f4d29604a9aeb971fb0a7bc1d5f699"
+      },
+      "metadataSource": "microsoft.netcore.app.runtime.win-x64.nuspec",
+      "packageSha512": "55suoRAIf6dVjOdPhHxIElDa2GBoqVZI70bG4zq+f2pHQbGV6yDvztsXdit4pxc3Ea79X0Kfo78Kncjt9NauIQ=="
+    },
+    {
+      "component": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
+      "version": "10.0.13",
+      "kind": "runtimepack",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/dotnet/dotnet",
+        "commit": "4099f83977f4d29604a9aeb971fb0a7bc1d5f699"
+      },
+      "metadataSource": "microsoft.windowsdesktop.app.runtime.win-x64.nuspec",
+      "packageSha512": "g8vz2rWeSNYimFNYUqXUy7yVkKJOQycy9ksNt59122iv+y7Y5KrR/PwoSCQgXO3KBJbf4uEdK0LuCr8OaVwQcw=="
+    },
+    {
+      "component": "Microsoft.Windows.SDK.NET.Ref",
+      "version": "10.0.19041.57",
+      "kind": "runtimepack",
+      "license": null,
+      "licenseType": "url",
+      "licenseUrl": "https://aka.ms/WinSDKLicenseURL",
+      "repository": null,
+      "metadataSource": "microsoft.windows.sdk.net.ref.nuspec",
+      "packageSha512": "TI9FqukRZSFfSZ6fLh0cjO0X0OIAn5vZKGU/iNzINt3IZeK7o9Y1Dmtp+xwEv696XO1cHMB7aUqTjql3/KY9xg=="
+    },
+    {
+      "component": "DocumentFormat.OpenXml",
+      "version": "3.3.0",
+      "kind": "package",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/dotnet/Open-XML-SDK",
+        "branch": "refs/heads/main",
+        "commit": "fcdd9e4fa5a3c1136ed87196683c60f340ac5f62"
+      },
+      "metadataSource": "documentformat.openxml.nuspec",
+      "packageSha512": "5AaTgSxQH1UFrZvtkHy3iSOzElt1F3+nhcxfI8gcXuTG3/0BiMMskOTVvKWtn/bwr6g5ZPb9fM6fTHos04BH/Q=="
+    },
+    {
+      "component": "DocumentFormat.OpenXml.Framework",
+      "version": "3.3.0",
+      "kind": "package",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/dotnet/Open-XML-SDK",
+        "branch": "refs/heads/main",
+        "commit": "fcdd9e4fa5a3c1136ed87196683c60f340ac5f62"
+      },
+      "metadataSource": "documentformat.openxml.framework.nuspec",
+      "packageSha512": "yngzsSoeR1DQuv3/EtB7Ptpl2pwqrI/iHpvjd0SLRPckVwPtZOmMJeUL5RxOUNJxjvMHFe34LvdDPJM4t1k/nA=="
+    },
+    {
+      "component": "NAudio",
+      "version": "2.2.1",
+      "kind": "package",
+      "license": "license.txt",
+      "licenseType": "file",
+      "licenseUrl": "https://aka.ms/deprecateLicenseUrl",
+      "repository": {
+        "url": "https://github.com/naudio/NAudio"
+      },
+      "metadataSource": "naudio.nuspec",
+      "packageSha512": "QmHUKqsU4iQJ8gfKECJGyiBHGUk18XBZSYUBSJq+yRfvcvqV96IrEY12bQSAhnJSiCFlMIcoVZTfp/OcomCExg=="
+    },
+    {
+      "component": "NAudio.Asio",
+      "version": "2.2.1",
+      "kind": "package",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "url": "https://github.com/naudio/NAudio"
+      },
+      "metadataSource": "naudio.asio.nuspec",
+      "packageSha512": "HWM/SqYTessyvfIyh5WZ21pfVIfJygzei/57d9LcXWs+yob2+hHasGAHdqGAsvfL7boZWfuPD0LxcWAHKGODBA=="
+    },
+    {
+      "component": "NAudio.Core",
+      "version": "2.2.1",
+      "kind": "package",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "url": "https://github.com/naudio/NAudio"
+      },
+      "metadataSource": "naudio.core.nuspec",
+      "packageSha512": "mI1gc6likH9pDzLEsKolvj9X+2rMunEw8s5tdOUN7tSRJAoXI3Fd6Ise6xrWsHvW1EQaWPItb5AyYk6S3ljrew=="
+    },
+    {
+      "component": "NAudio.Midi",
+      "version": "2.2.1",
+      "kind": "package",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "url": "https://github.com/naudio/NAudio"
+      },
+      "metadataSource": "naudio.midi.nuspec",
+      "packageSha512": "o5KinntLW8ulx01rYf7DrSlKIaFp3wjxdnWnnmOLgbP+FtVNRxOfBGiquvNNDWFNTIMAU9qo+D7wzHZIY8zROQ=="
+    },
+    {
+      "component": "NAudio.Wasapi",
+      "version": "2.2.1",
+      "kind": "package",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "url": "https://github.com/naudio/NAudio"
+      },
+      "metadataSource": "naudio.wasapi.nuspec",
+      "packageSha512": "AMvEdIEjdxknxt9rrzBkBSvoAYBBHUnMUHWF2B/q15k9h2q4wgPztluSBVoj3XIPrYys5OCNhND/14J7hyNqiQ=="
+    },
+    {
+      "component": "NAudio.WinForms",
+      "version": "2.2.1",
+      "kind": "package",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "url": "https://github.com/naudio/NAudio"
+      },
+      "metadataSource": "naudio.winforms.nuspec",
+      "packageSha512": "PGc3KGWLX9rbZ4DQIQu9ChV7s7/OJS2ouJP3AdjxUl1oSKM6eII9ZYdGH7PKN7Mh4MaHr36dXMOnIAPUQKrbOw=="
+    },
+    {
+      "component": "NAudio.WinMM",
+      "version": "2.2.1",
+      "kind": "package",
+      "license": "MIT",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repository": {
+        "url": "https://github.com/naudio/NAudio"
+      },
+      "metadataSource": "naudio.winmm.nuspec",
+      "packageSha512": "3+w4f7aGBfJjrRSgTCXwQJR8RGwSCnKGGs3Zmmikyji5NMp8UxTZTJBQyLvho0vjJd9lVerhz/nj7nnwD8JU8w=="
+    },
+    {
+      "component": "PdfPig",
+      "version": "0.1.11",
+      "kind": "package",
+      "license": "Apache-2.0",
+      "licenseType": "expression",
+      "licenseUrl": "https://licenses.nuget.org/Apache-2.0",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/UglyToad/PdfPig",
+        "branch": "refs/heads/master",
+        "commit": "9cb3b71e62f0905e8b8c879f84188fc8e5013a91"
+      },
+      "metadataSource": "pdfpig.nuspec",
+      "packageSha512": "JPZ9IqmnI0nY3553rXUHGoD6g26fvxWQE8IsJNgT2yt86V3KZthrPNuvDS0umPMbeG1XlfVPozVZeCqwxW/KKA=="
+    }
+  ],
+  "licenseFiles": {
+    "OpenXML.txt": {
+      "sha256": "ed03ba352313a4ba7019d5bed4bd3218ac17f3e44442a3bb1aaff54dcca9a2bc"
+    },
+    "PdfPig.txt": {
+      "sha256": "4c510e162f896ea43b4b1cf1b743641d7c756f1004d0e5eaf0615b28b7ded409"
+    },
+    "NAudio.txt": {
+      "sha256": "303e01786b271eb464b3f43d18a375f2f17d37bc708a37c2fdf45b289fb5bfaa"
+    },
+    "Microsoft.NET-LICENSE.txt": {
+      "sha256": "d7a68596ab69b06f51ca278a6545148e4269a9381c26d597c13df5d88e08cf5b"
+    },
+    "Microsoft.NET-THIRD-PARTY-NOTICES.txt": {
+      "sha256": "6d15e10a101c6bfff2ab4429ed061bf76c456fc4b23ad6b03e0d0f8377148a21"
+    },
+    "WindowsDesktop-LICENSE.txt": {
+      "sha256": "a89886665765362eb77e0f8e26602c924520041d1711b2eedc136434fe4d01ab"
+    },
+    "WPF-THIRD-PARTY-NOTICES.txt": {
+      "sha256": "d23dba2fee20c6b59d8f7088ee9ed372459c952a319b7ca90f3eec370cc76eb9"
+    },
+    "WinForms-THIRD-PARTY-NOTICES.txt": {
+      "sha256": "5a412b38efae0b162dc0893b319023f4cd14a8985a0f9f9ae01ac052b37a36eb"
+    },
+    "WindowsSDK-License.txt": {
+      "sha256": "5238259f6446dcaa7128b806d9b07fd28320e4b6bf05109704a8356f7449e476"
+    },
+    "WindowsSDK-License.rtf": {
+      "sha256": "dd07eb178e00c6bba4148457fc00ff77cd4887eb521d504186fe59c9ec8bbe62"
+    },
+    "WindowsSDK-REDIST.txt": {
+      "sha256": "8b38d8209690636748e8ddc74af3dc3fdd8ec8ab6dda35f28b34e7c1c94566f2"
+    },
+    "CsWinRT.txt": {
+      "sha256": "9906940f61b1f0b533fa7d99baf55178b2808fbe113ea51dfbfad8572ccd5f2b"
+    }
+  },
+  "sourceNotes": {
+    "OpenXML.txt": "https://raw.githubusercontent.com/dotnet/Open-XML-SDK/fcdd9e4fa5a3c1136ed87196683c60f340ac5f62/LICENSE",
+    "PdfPig.txt": "https://raw.githubusercontent.com/UglyToad/PdfPig/9cb3b71e62f0905e8b8c879f84188fc8e5013a91/LICENSE",
+    "WindowsSDK-License.rtf": "https://aka.ms/WinSDKLicenseURL",
+    "WindowsSDK-License.txt": "Plain-text conversion of the unmodified original RTF using Windows RichEdit",
+    "WindowsSDK-REDIST.txt": "https://learn.microsoft.com/en-us/legal/windows-sdk/redist",
+    "WPF-THIRD-PARTY-NOTICES.txt": "https://raw.githubusercontent.com/dotnet/dotnet/4099f83977f4d29604a9aeb971fb0a7bc1d5f699/src/wpf/THIRD-PARTY-NOTICES.TXT",
+    "WinForms-THIRD-PARTY-NOTICES.txt": "https://raw.githubusercontent.com/dotnet/dotnet/4099f83977f4d29604a9aeb971fb0a7bc1d5f699/src/winforms/THIRD-PARTY-NOTICES.TXT",
+    "CsWinRT.txt": "https://raw.githubusercontent.com/microsoft/CsWinRT/8649ee3eeb2445ca2a36d80d878ef60b96a6c65d/LICENSE"
+  }
+}

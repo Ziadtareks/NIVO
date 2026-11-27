@@ -4,14 +4,21 @@ $nivoOutput = Join-Path $nivoRoot 'artifacts/NIVO-win-x64'
 if (-not (Test-Path -LiteralPath (Join-Path $nivoOutput 'NIVO.Local.exe'))) { throw 'Publish the application before packaging it' }
 Push-Location $nivoRoot
 try {
-    Copy-Item -LiteralPath (Join-Path $nivoRoot 'README.md') -Destination $nivoOutput
+    foreach ($nivoDocument in @('README.md', 'LICENSE')) {
+        Copy-Item -LiteralPath (Join-Path $nivoRoot $nivoDocument) -Destination $nivoOutput
+    }
+    Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/THIRD_PARTY_NOTICES.txt') -Destination (Join-Path $nivoOutput 'NIVO.THIRD_PARTY_NOTICES.txt')
     $nivoDocs = Join-Path $nivoOutput 'docs'
     New-Item -ItemType Directory -Path $nivoDocs -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/FEATURES.md') -Destination $nivoDocs
-    Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/THIRD_PARTY.md') -Destination $nivoDocs
-    Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/VERIFICATION.md') -Destination $nivoDocs
-    Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/REVIEW.md') -Destination $nivoDocs
-    Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/licenses') -Destination $nivoDocs -Recurse -Force
+    $nivoSourceDocs = @(Get-ChildItem -LiteralPath (Join-Path $nivoRoot 'docs') -File)
+    # Remove stale top-level documents from earlier packages, using the current public documentation as the allowlist.
+    foreach ($nivoOldDoc in @(Get-ChildItem -LiteralPath $nivoDocs -File)) {
+        if ($nivoOldDoc.Name -notin $nivoSourceDocs.Name) { Remove-Item -LiteralPath $nivoOldDoc.FullName }
+    }
+    foreach ($nivoDocument in $nivoSourceDocs) { Copy-Item -LiteralPath $nivoDocument.FullName -Destination $nivoDocs }
+    foreach ($nivoDirectory in @('licenses', 'images')) {
+        Copy-Item -LiteralPath (Join-Path $nivoRoot ('docs/' + $nivoDirectory)) -Destination $nivoDocs -Recurse -Force
+    }
     # ZIP entry names use forward slashes, including when this script runs on Windows.
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem

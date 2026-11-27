@@ -1,0 +1,3 @@
+# Preserve upstream license and notice bytes exactly, including their original line endings.
+docs/licenses/** -text
+docs/THIRD_PARTY_NOTICES.txt -text
