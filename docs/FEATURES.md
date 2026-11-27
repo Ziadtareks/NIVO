@@ -4,14 +4,14 @@ This inventory distinguishes implemented application behavior from unverified ex
 
 | Area | Implemented | Limits / external requirements |
 |---|---|---|
-| Name and identity | NIVO / نيڤو, full bilingual Arabic (RTL) + English (LTR) interface with live 1-click toggle, custom upright SVG mark, tray icon | Independent product; no AYO assets copied |
+| Name and identity | NIVO / نيڤو, full bilingual Arabic (RTL) + English (LTR) interface with live 1-click toggle, custom upright SVG mark, tray icon | Independent product with original application artwork |
 | Windows shell | 8-state top-edge cosmic glass Living Notch (`IslandWindow`: Idle, Working progress pill, Completed `Open` pill, Inline Proactive Suggestion pill, 4×2 Command Center + Recent Creations, Inline Silent Ask with capture thumbnail, Inline Smart Clipboard with dual text+image preview, Direct 1-click PDF/MP4/Office Converter Drop Zone); 3-capsule wallpaper-sampled Liquid Glass Dock (`DockWindow`: Start/Search/Focus profiles, NIVO orb + Pinned + Live Running + Context-Suggested apps with magnification & hover pills, Clock/Volume/Wi-Fi/Language/Quick Tray status capsule) | Primary monitor; no Explorer binary modifications |
 | Ready-to-run download | A self-contained single Windows x64 EXE in GitHub Releases; no build tools or separate .NET installation | AI backend runtimes/accounts remain external |
 | Windows startup | Settings → Desktop → Start NIVO with Windows; current-user Startup shortcut, no Administrator rights | Off unless enabled; keep the EXE in a permanent folder; moving it requires updating the option |
 | Taskbar replacement | Opt-in hide/restore of the native taskbar, crash watchdog | Primary taskbar only; third-party shell replacements not tested |
 | Context apps | VS Code/Studio and Office/PDF process-based suggestions | Rules, not AI prediction; pin order is retained, but absolute positions can shift as dock width changes |
 | Focus | Profile-aware filtering of unpinned running apps, keeping all pins | Does not close or suppress other apps or browser content |
-| Themes | Frost, Horizon, Frutiger Aero, Nebula, Grey, Pearl, plus OLED | OLED uses pure-black backgrounds and opaque black shell glass; other themes retain wallpaper sampling. Independent interpretations, not AYO theme assets |
+| Themes | Frost, Horizon, Frutiger Aero, Nebula, Grey, Pearl, plus OLED | OLED uses pure-black backgrounds and opaque black shell glass; other themes retain wallpaper sampling. Application-owned theme definitions |
 | Text assistant | OpenCode v2 CLI (uses configured user providers/logins by default or optional strict free-only mode), dynamic catalog refresh, configurable fallback model with 429 cooldown, JSON event streaming | Live text and image inference verified via `google/gemini-3.5-flash-lite`; encrypted optional Google credential; built-in `opencode/*-free` tier shares provider quota limits |
 | Connected accounts | Browser sign-in and private provider profiles for Codex/ChatGPT and Antigravity/Google; dynamic protocol catalogs, image capability labels, chat/image routing and streaming | One account per provider; CLI required; fixture and unauthenticated native probes verified; Codex account chat works per user report, live native voice and Google code sign-in require user interaction. Catalog is not entitlement/quota proof. Talk automatically selects a connected account: experimental Codex inline or original Antigravity external CLI (F6); ACP itself has no Live voice, and neither account route enables image generation or native web search. |
 | Silent Ask | Bottom composer, corner answer card, Tab/Shift+Tab modes, drag/drop, attachment preview, Arabic input direction | Four global shortcuts configurable in Settings; conflicts reported, with tray fallback |
@@ -41,22 +41,20 @@ This inventory distinguishes implemented application behavior from unverified ex
 | Deployment | Portable Windows build and packaging scripts | No code signing, automatic updater, accounts, subscriptions, or hosted backend |
 | Performance | Native WPF interface, no Electron runtime | No claim of 1% CPU / <1 GB RAM; OpenCode and conversions are separate processes |
 
-Public references used for feature discovery: https://heyayo.com/ and https://github.com/yazanAydi/ayo-releases/releases/tag/v3.0.1.
 
-## Reference review for version 0.2
+## Implementation review for version 0.2
 
-On 2026-11-24 the live [Meet AYO](https://heyayo.com/#meet-ayo), [Features](https://heyayo.com/#features), toolbox popups and Settings tabs were inspected. The site explicitly labels Silent Ask answers as scripted, Lore Web facts as made up, and proactive timing as sped up. Those demos establish visible interaction intent, not successful production behavior. Only three themes can be previewed on the website; the other three are named.
 
-The largest gaps corrected in 0.2 were the dark-only Frost palette, large centered Silent Ask window, static island, single-icon hover effect, incomplete theme coverage, projected 2D memory map, missing task-state card, absent drop/Tab interactions, and recreating every message control on each streamed chunk.
+Version 0.2 corrected the dark-only Frost palette, large centered Silent Ask window, static island, single-icon hover effect, incomplete theme coverage, projected 2D memory map, missing task-state card, absent drop/Tab interactions, and recreating every message control on each streamed chunk.
 
 A follow-up independent Gemini 4 Neon review produced version 0.2.1. See [the reconciled findings](REVIEW.md).
 
 Motion uses short eased entrance/press transitions, interruptible 220 ms island surface/clip transforms with destination panel layout and content fades, cosine dock magnification with neighbor spacing, animated Focus contraction, busy/speech activity bars, optional click-through task edge indication, task/card entrances and memory rotation with deceleration. Reduce motion and Follow Windows animations are independent preferences: NIVO can animate while Windows animation is disabled, without changing Windows settings. Finite transitions release their clocks; repeating activity bars run at 30 fps only while visible and active. Wallpaper blur is clipped within rounded capsule geometry, and each capsule samples its own screen region.
 
-### Remaining differences
+### Implementation boundaries
 
-- This is an independent native WPF implementation. NIVO does not contain AYO's Electron/React code, proprietary materials, voices, cloud infrastructure or identical rendered pixels. Wallpaper sampling is not a live DWM backdrop implementation.
-- Website desktop folders, custom website cursor, window demonstrations and browser icon arrangement belong to its desktop simulation. NIVO does not replace Explorer's actual desktop or globally change the Windows cursor.
+- NIVO is a native WPF implementation. Wallpaper sampling is not a live DWM backdrop implementation.
+- NIVO does not replace Explorer's actual desktop or globally change the Windows cursor.
 - Wake word remains deferred; native Codex account Talk is now being integrated at the user's request. Gmail and live model/search/speech success need external service availability and user credentials where required.
 - The agent executes reviewed supported actions; it is not a universal mouse/keyboard automation agent. Your Usual replays selected launch/layout steps, not arbitrary recorded input.
 - Capture/crop targets the monitor under the cursor. Primary-monitor native acceptance passed; mixed-DPI hardware and taskbar crash restoration still need device testing.

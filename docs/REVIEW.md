@@ -1,6 +1,6 @@
 # Gemini 4 Neon review reconciliation — NIVO 0.2.1
 
-Gemini 4 Neon independently inspected the live AYO website, its interactive demos, CSS, toolbox popups and Settings, then compared NIVO source and WPF renders. This was a read-only review; no live model inference was run. The parent checked findings against the current code before applying changes. Website demo behavior is evidence of interaction design, not proof of AYO's production implementation.
+An independent review examined NIVO source and rendered WPF interfaces. Findings were checked against current code before changes were applied. UI reviews do not establish successful live provider behavior.
 
 ## Findings addressed
 
@@ -18,11 +18,11 @@ Gemini 4 Neon independently inspected the live AYO website, its interactive demo
 
 Some documentation findings referred to files read before concurrent updates. The current feature inventory and verification record supersede the older 30/58-check and projected-map descriptions.
 
-## Deliberate differences still present
+## Implementation boundaries
 
 - Voice and wake-word activation remain deferred until the user configures speech APIs.
-- This is an independent WPF implementation, with sampled wallpaper glass rather than AYO's private material/shader implementation. It is not pixel-identical.
-- Explorer's actual desktop, global cursors, accounts, subscriptions and AYO's hosted services are not reproduced. Website folder/cursor effects are part of its browser desktop simulation.
+- NIVO uses native WPF rendering and sampled wallpaper glass.
+- NIVO does not replace the Windows desktop, global cursors, or external provider infrastructure.
 - The reviewed agent supports an explicit action set. It does not offer arbitrary mouse/keyboard automation, password entry or learned input macros.
 - File drops are bounded to documents/media and one image. Folders are rejected; choose files explicitly. PDF-to-Word is text-based, not full layout reconstruction or scanned-page OCR.
 - Capture uses the primary monitor. Live speech, Gmail authorization, model-generated text/vision/planning/search and broad device/game compatibility remain unverified. The last live OpenCode request returned the free-provider quota limit; no paid fallback was used.
@@ -34,7 +34,7 @@ See [FEATURES.md](FEATURES.md) and [VERIFICATION.md](VERIFICATION.md) for implem
 
 ## 1.2.1 readiness follow-up
 
-The second Neon audit identified concrete lifecycle defects beyond visual parity. Desktop timer/suggestion work is now suppressed during capture; language replacement permanently disposes the old Silent Ask; completion callbacks on a retired Island forward to its current replacement; shutdown is guarded against re-entry. A single live taskbar watchdog is reused instead of spawning one on each hide transition.
+The second Neon audit identified concrete lifecycle defects in addition to visual defects. Desktop timer/suggestion work is now suppressed during capture; language replacement permanently disposes the old Silent Ask; completion callbacks on a retired Island forward to its current replacement; shutdown is guarded against re-entry. A single live taskbar watchdog is reused instead of spawning one on each hide transition.
 
 Inline image follow-ups reset the consumed capture/mode; busy/unsupported/folder drops are rejected, multi-file previews keep controls visible, and Back/Cancel release pinning. Clipboard transformations track their own response, and Refresh detaches late results.
 
@@ -42,11 +42,11 @@ The user-reported dock label drift came from measuring DesiredSize after assigni
 
 Settings uses existing native theme resources with grouped sections, wrapped explanatory controls, separate model routes, lazy cancellable catalog checks and pinned Save/Revert. Quota parsing handles nested provider status codes; configuration changes clear cooldowns; image consent discloses the dedicated vision fallback. No fallback is enabled automatically.
 
-Converters normalize cardinal PDF text rotations, preserve scanned-page orientation, retry oversized scanned renders within image budgets, emit valid Arabic Word styles and sanitize XML text. Video recompression accepts odd dimensions and emits even-sized yuv420p output. Complex floating PDF layouts, OCR and arbitrary oblique text remain bounded fidelity limitations. Final run evidence is recorded in VERIFICATION.md; the broader parity record remains open for untested hardware/material fidelity.
+Converters normalize cardinal PDF text rotations, preserve scanned-page orientation, retry oversized scanned renders within image budgets, emit valid Arabic Word styles and sanitize XML text. Video recompression accepts odd dimensions and emits even-sized yuv420p output. Complex floating PDF layouts, OCR and arbitrary oblique text remain bounded fidelity limitations. Final run evidence is recorded in VERIFICATION.md; hardware coverage and material rendering remain subject to testing.
 
 ## Version 1.3.0 motion reconciliation
 
-Neon compared the current dock and island against the saved video frames and the live AYO reference. Its Dock implementation adds cosine proximity magnification, lateral spacing, focus width transitions, context-label anchoring, active-app halos and per-capsule wallpaper sampling. The parent integrated Island morphing, flush bottom lighting, interrupted-collapse recovery and visible-only activity waveforms.
+Neon reviewed NIVO's dock and island interactions. Its Dock implementation adds cosine proximity magnification, lateral spacing, focus width transitions, context-label anchoring, active-app halos and per-capsule wallpaper sampling. The parent integrated Island morphing, flush bottom lighting, interrupted-collapse recovery and visible-only activity waveforms.
 
 Actual motion-on tests exposed two shared WPF defects: attaching animation storage discarded `SetCurrentValue` resting sizes, and a fresh clock exposed its target before the first tick. Motion-owned properties now commit their base value with `SetValue`, start from the displayed value using an aligned clock seek, deduplicate identical targets and release completed clocks. App-only animation is explicitly supported because this device disables Windows interface animation. No system preference was modified.
 

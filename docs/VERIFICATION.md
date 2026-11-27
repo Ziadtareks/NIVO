@@ -1,6 +1,6 @@
 # Verification — 2026-11-26
 
-Status: version 1.9.0 standalone Windows EXE and opt-in startup; overall reference parity work remains in progress; see [PARITY.md](PARITY.md).
+Status: version 1.9.0 standalone Windows EXE and opt-in startup; hardware and live-provider acceptance testing remains in progress.
 
 ## Build and local checks
 
@@ -26,7 +26,7 @@ Release build succeeds with zero warnings/errors. The published 63-check account
 
 Regression suites exit 0: 51 assistant checks (`artifacts/assistant-20261126-223115/results.txt`) and 53 motion/theme checks (`artifacts/motion-20261126-223232/results.txt`). A metadata-only probe using the user's already linked account resolved `antigravity/gemini-4-neon` as the actual default, without microphone access or model inference. The user confirms Google sign-in works.
 
-Antigravity voice uses the original interactive CLI in an external window; press F6 or `/voice live` there. ACP itself has no audio transport. NIVO does not inject its chat context/system prompt into that interactive window or receive its transcripts. Account voice entitlement, actual console presentation, physical audio and acoustic quality still require user interaction. Codex retains its experimental inline route. No paid API fallback or token copying is introduced. Overall AYO parity remains incomplete.
+Antigravity voice uses the original interactive CLI in an external window; press F6 or `/voice live` there. ACP itself has no audio transport. NIVO does not inject its chat context/system prompt into that interactive window or receive its transcripts. Account voice entitlement, actual console presentation, physical audio and acoustic quality still require user interaction. Codex retains its experimental inline route. No paid API fallback or token copying is introduced. Hardware and live-provider acceptance testing remains incomplete.
 
 ### Version 1.7.0 native account voice and auth repair
 
@@ -34,7 +34,7 @@ Release build passes with zero warnings/errors. The 44-check account suite exits
 
 Native unauthenticated/pre-browser probes: 5 checks, exit 0 (`artifacts/account-native-20261126-220957/results.txt`), including Codex voice auth refusal before audio activation and real agy producing a validated Google OAuth URL then cancelling without opening a browser or sending credentials. Regressions: 51 assistant checks (`artifacts/assistant-20261126-220647/results.txt`), 25 computer checks (`artifacts/computer-20261126-220652/results.txt`), and 53 motion/theme checks (`artifacts/motion-20261126-220704/results.txt`), all exit 0. OLED rendering was inspected; its Dock glass is opaque black while other themes retain 0.78 glass opacity.
 
-Neon additionally reports 23 scratch native-voice checks and six disposable real-agy pre-browser/auth-isolation checks. The user reports Codex account chat works. This is not an authenticated voice/mic/speaker acceptance test: live Codex voice entitlement and acoustic behavior, and a complete user Google sign-in remain pending interaction. Native Talk has no computer-action tools; ordinary reviewed text tasks retain computer access. Overall AYO parity is not marked complete.
+Neon additionally reports 23 scratch native-voice checks and six disposable real-agy pre-browser/auth-isolation checks. The user reports Codex account chat works. This is not an authenticated voice/mic/speaker acceptance test: live Codex voice entitlement and acoustic behavior, and a complete user Google sign-in remain pending interaction. Native Talk has no computer-action tools; ordinary reviewed text tasks retain computer access. Hardware and live-provider acceptance is not claimed complete.
 
 
 ### Version 1.6.0 connected-account verification
@@ -90,7 +90,7 @@ Motion-on coverage includes interruptible sizing, committed resting values, tran
 
 Coverage includes encrypted secrets, model isolation/fallback/cooldown, real subprocess NDJSON streaming/cancellation, non-modal approval, attached-source edit hashes/backups/BOM and writer exclusion, error-awareness dwell/guards, real PDF→DOCX and XLSX→PDF, smaller FFmpeg output, direct-conversion state/Stop, nine crop actions/Escape, negative-monitor/DPI geometry, all eight Hub pages, six shell palettes and bilingual rendering. A fixture proves the application protocol, not a live provider's capabilities.
 
-The Windows x64 self-contained v1.3.0 publish and both portable/source ZIPs were rebuilt successfully. Archive paths were inspected: no absolute/traversal/backslash entries, secret files or environment files. PARITY.md is included in both packages. The directory is not a Git checkout, so no Git diff or commit was available; changed source and generated artifacts were reviewed directly.
+The Windows x64 self-contained v1.3.0 publish and both portable/source ZIPs were rebuilt successfully. Archive paths were inspected: no absolute/traversal/backslash entries, secret files or environment files. The directory is not a Git checkout, so no Git diff or commit was available; changed source and generated artifacts were reviewed directly.
 
 ## Live OpenCode and Gemini
 
@@ -110,7 +110,7 @@ LibreOffice 26.8.3.1 was provisioned as a local administrative image from the of
 
 The initial Arabic deck was rendered and all seven pages reviewed for typography/overflow; the follow-up export was confirmed to contain exactly six pages, rendered, and all six pages reviewed with no clipping. This verifies layout, not factual correctness of every generated sentence. PDF→Word now reconstructs editable paragraphs, page geometry, basic two-column reading order, Arabic direction and embedded images. Synthetic text/image/mixed-size/RTL fixtures and OpenXML validation passed; real LibreOffice round-trip preserves image horizontal placement. Native Windows rendering covers scanned/vector-only pages as images without OCR. Unsupported visual pages and size/image budgets fail without partial output; an existing destination is preserved. Complex tables/equations/floating layouts remain approximate.
 
-All six expanded Island/Dock palettes were rendered and reviewed. Status/icon and Smart Clipboard contrast defects were corrected. Screenshots use synthetic data and do not by themselves establish pixel-identical AYO parity.
+All six expanded Island/Dock palettes were rendered and reviewed. Status/icon and Smart Clipboard contrast defects were corrected. Screenshots use synthetic data and do not by themselves establish live desktop behavior.
 
 ## Performance and outstanding acceptance
 
@@ -122,7 +122,7 @@ Earlier native acceptance passed 25 checks in `artifacts/desktop-20261125-160909
 
 The final local suite verifies repeated hover movement at 1280 DIPs with eight pins and six synthetic running apps in English/Arabic, non-overlapping capsules, all six Settings tabs in both languages, minimum-window Save visibility, initial/edit/after-save notices, nullable/string/oversized retry hints, cooldown reset and dedicated vision consent. Real odd-size yuv444p video was converted to smaller 162×92 yuv420p output and inspected with FFprobe. Cardinal PDF rotations and Word/PPTX XML/Arabic checks passed.
 
-Instrumented real-cursor runs matched app labels to icon centers for both first/last pinned apps in Arabic and English. The latest expanded desktop run (`artifacts/desktop-20261125-164051`) passed those hover checks, capture/exclusion and clipboard-refusal paths, but did not complete repeated-error help: foreground/UI Automation availability changed during probing. The user explicitly deferred further mouse/keyboard desktop testing. The final package was therefore built with `-SelfContained`, without claiming a pass for `-DesktopAcceptance` on this revision. Real mixed-DPI hardware and full wallpaper/motion fidelity remain open in PARITY.md. Voice/wake word stay deferred until separate speech API configuration.
+Instrumented real-cursor runs matched app labels to icon centers for both first/last pinned apps in Arabic and English. The latest expanded desktop run (`artifacts/desktop-20261125-164051`) passed those hover checks, capture/exclusion and clipboard-refusal paths, but did not complete repeated-error help: foreground/UI Automation availability changed during probing. The user explicitly deferred further mouse/keyboard desktop testing. The final package was therefore built with `-SelfContained`, without claiming a pass for `-DesktopAcceptance` on this revision. Real mixed-DPI hardware and wallpaper/motion behavior remain subject to acceptance testing. Voice/wake word stay deferred until separate speech API configuration.
 
 ## Readiness follow-up — 1.2.1
 

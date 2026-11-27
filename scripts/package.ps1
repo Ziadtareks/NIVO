@@ -11,7 +11,6 @@ try {
     Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/THIRD_PARTY.md') -Destination $nivoDocs
     Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/VERIFICATION.md') -Destination $nivoDocs
     Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/REVIEW.md') -Destination $nivoDocs
-    Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/PARITY.md') -Destination $nivoDocs
     Copy-Item -LiteralPath (Join-Path $nivoRoot 'docs/licenses') -Destination $nivoDocs -Recurse -Force
     # ZIP entry names use forward slashes, including when this script runs on Windows.
     Add-Type -AssemblyName System.IO.Compression

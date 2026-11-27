@@ -17,4 +17,4 @@ External tools are not bundled:
 
 Google OAuth/Gmail, OpenCode model providers, and user-supplied speech providers have their own terms, privacy policies, quotas, and availability. Free access today is not a promise of permanent free access. The application ships without provider secrets or Google OAuth credentials.
 
-Design review used the Unslop skill by Damir Sokolovsky ([@heydamir](https://x.com/heydamir), [unslop](https://heydamir.design/unslop)), licensed CC BY 4.0. NIVO retains the user-requested glass direction; no AYO visual asset was copied.
+Design review used the Unslop skill by Damir Sokolovsky ([@heydamir](https://x.com/heydamir), [unslop](https://heydamir.design/unslop)), licensed CC BY 4.0. NIVO uses its own application artwork.
