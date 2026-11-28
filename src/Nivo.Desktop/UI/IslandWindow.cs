@@ -82,6 +82,8 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
     private string activeView = "command";
     private string compactMode = ""; // "", "working", "done", "suggest"
     private string[] pendingDroppedFiles = [];
+    private readonly TextBlock dropHead;
+    private readonly Panel dropSecondary;
     private string? clipText;
     private System.Windows.Media.Imaging.BitmapSource? clipBitmap;
     private bool pinned, wasBusy, localConverting, closed;
@@ -150,7 +152,14 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         var recentHeader = new TextBlock { Text = IsAr ? "أحدث ما صنعته نيڤو" : "Recent creations", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = ShellTheme.Ink("#8CB3DF"), VerticalAlignment = VerticalAlignment.Center };
         var hubLink = DarkPillBtn(IsAr ? "المركز الرئيسي ↗" : "Open Hub ↗", () => ((App)Application.Current).Hub.ShowAssistant());
         hubLink.Padding = new Thickness(10, 3, 10, 3); hubLink.FontSize = 10.5; hubLink.Margin = new Thickness(0);
-        recentBar.Children.Add(recentHeader); Grid.SetColumn(hubLink, 1); recentBar.Children.Add(hubLink);
+        var pickFiles = DarkPillBtn(IsAr ? "اختار ملفات…" : "Choose files…", () =>
+        {
+            var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = Loc.T("Choose files for the Island", "اختار ملفات للجزيرة") };
+            if (picker.ShowDialog(this) == true) DropFiles(picker.FileNames);
+        });
+        pickFiles.Tag = "IslandChooseFiles";
+        var fileAndHub = Ui.Row(pickFiles, hubLink);
+        recentBar.Children.Add(recentHeader); Grid.SetColumn(fileAndHub, 1); recentBar.Children.Add(fileAndHub);
         commandView = Ui.Stack(statusBanner, gridTiles, recentBar, recentList);
 
         // === View 2: Inline Silent Ask inside the Notch (matching frame_39 & frame_40) ===
@@ -217,9 +226,9 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         clipboardView = Ui.Stack(clipHead, clipPreviewCard, clipActions, clipFoot);
 
         // === View 4: Direct 1-Click File Converter & Drop Zone (matching frame_50 & frame_51) ===
-        var dropHead = new TextBlock { Text = IsAr ? "⬇  ارمِ ملفك هنا للتحويل أو المعالجة فورًا" : "⬇  Drop files for instant conversion or AI help", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = ShellTheme.Ink("#6FE8FA"), Margin = new Thickness(0, 4, 0, 6) };
+        dropHead = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = ShellTheme.Ink("#6FE8FA"), Margin = new Thickness(0, 4, 0, 6) };
         var dropBox = new Border { Background = ShellTheme.Surface("#172C59"), BorderBrush = ShellTheme.Line("#4ADDF2"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 9, 12, 9), Margin = new Thickness(0, 0, 0, 10), Child = new ScrollViewer { Content = dropListText, MaxHeight = 84, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } };
-        var dropSecondary = Ui.Row(
+        dropSecondary = Ui.Row(
             DarkPillBtn(IsAr ? "سلّمها للوكيل" : "Hand to Agent", () => HandleDroppedFiles(true)),
             DarkPillBtn(IsAr ? "اسأل عنها" : "Ask about it", () => HandleDroppedFiles(false)),
             DarkPillBtn(IsAr ? "إلغاء" : "Cancel", () => { pendingDroppedFiles = []; ReturnToCommands(); })
@@ -264,10 +273,42 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         frame.MouseEnter += (_, _) => { autoHideBanner.Stop(); if (compactMode == "") hoverIntent.Start(); };
         frame.MouseLeave += (_, _) => { hoverIntent.Stop(); if (!pinned && !c.Busy && !localConverting && activeView == "command" && compactMode == "") Expand(false); else if (compactMode is "done" or "suggest") autoHideBanner.Start(); };
 
-        PreviewDragEnter += (_, e) => { if (TryPreviewFiles(e, out var files)) { e.Effects = DragDropEffects.Copy; pinned = true; ShowDropPreview(files); } else e.Effects = DragDropEffects.None; e.Handled = true; };
-        PreviewDragLeave += (_, e) => { if (!c.Busy && !localConverting && activeView == "drop" && !new Rect(frame.RenderSize).Contains(e.GetPosition(frame))) { pendingDroppedFiles = []; pinned = false; SwitchView("command"); Expand(false); } };
-        PreviewDragOver += (sender, e) => { e.Effects = TryPreviewFiles(e, out _) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; };
-        Drop += (_, e) => { e.Handled = true; if (TryPreviewFiles(e, out var files)) DropFiles(files); else e.Effects = DragDropEffects.None; };
+        int dragGeneration = 0;
+        string[]? preview = null;
+        void RestoreDrop()
+        {
+            if (preview == null) return;
+            preview = null;
+            if (pendingDroppedFiles.Length > 0) ShowDropPreview(pendingDroppedFiles);
+            else { ReturnToCommands(); Expand(false); }
+        }
+        PreviewDragEnter += (_, e) =>
+        {
+            dragGeneration++;
+            bool accept = TryPreviewFiles(e, out var files);
+            e.Effects = accept ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true;
+            if (!accept) { RestoreDrop(); return; }
+            if (preview != null && preview.SequenceEqual(files, StringComparer.OrdinalIgnoreCase)) return;
+            preview = files; pinned = true; ShowDropPreview(files, awaitingRelease: true);
+        };
+        PreviewDragLeave += (_, _) =>
+        {
+            int generation = ++dragGeneration;
+            Dispatcher.BeginInvoke(new Action(() => { if (generation == dragGeneration) RestoreDrop(); }));
+        };
+        PreviewDragOver += (_, e) =>
+        {
+            dragGeneration++;
+            e.Effects = preview != null && !c.Busy && !localConverting && e.AllowedEffects.HasFlag(DragDropEffects.Copy) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        };
+        PreviewDrop += (_, e) =>
+        {
+            dragGeneration++;
+            e.Handled = true; e.Effects = DragDropEffects.None;
+            if (!TryPreviewFiles(e, out var files)) { RestoreDrop(); return; }
+            preview = null; DropFiles(files); e.Effects = DragDropEffects.Copy;
+        };
 
         replyPoll.Tick += (_, _) => SyncInlineReply();
         collapseContent.Tick += (_, _) => { collapseContent.Stop(); if (!IsExpanded) { expandedHost.Visibility = Visibility.Collapsed; Motion.AnimateTo(expandedHost, UIElement.OpacityProperty, 1, 0); } };
@@ -538,11 +579,13 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         pinned = true; Expand(true);
     }
 
-    private void ShowDropPreview(string[] files)
+    private void ShowDropPreview(string[] files, bool awaitingRelease = false)
     {
+        dropHead.Text = awaitingRelease ? Loc.T("Release to attach", "سيب الملفات هنا لإرفاقها") : Loc.T("Choose a file action", "اختار إجراء للملفات");
+        dropSecondary.Visibility = awaitingRelease ? Visibility.Collapsed : Visibility.Visible;
         dropListText.Text = files.Length == 0 ? (IsAr ? "أفلت ملفات PDF أو Word أو فيديو أو صور" : "Drop PDF, Word, video, or image files") : string.Join("  ·  ", files.Select(Path.GetFileName));
         dropConvertRow.Children.Clear();
-        if (files.Length == 1)
+        if (!awaitingRelease && files.Length == 1)
         {
             var first = files[0];
             var ext = Path.GetExtension(first).ToLowerInvariant();
@@ -565,7 +608,7 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
     private bool TryPreviewFiles(DragEventArgs e, out string[] files)
     {
         files = [];
-        if (c.Busy || localConverting || !e.Data.GetDataPresent(DataFormats.FileDrop) || e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return false;
+        if (c.Busy || localConverting || !e.AllowedEffects.HasFlag(DragDropEffects.Copy) || !e.Data.GetDataPresent(DataFormats.FileDrop) || e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return false;
         try { files = ChatComposer.ValidateDropFiles(paths); return files.Length > 0; }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException) { return false; }
     }
@@ -654,9 +697,11 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         else
         {
             using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-            string transcript = await c.Voice.StopAndTranscribe(ct.Token);
-            c.SetStatus("Ready when you are");
-            if (!string.IsNullOrWhiteSpace(transcript)) await OpenAskWithPrompt(transcript, false);
+            var chat = c.Current;
+            string transcript;
+            try { transcript = await c.Voice.StopAndTranscribe(ct.Token); }
+            finally { if (!c.Busy) c.SetStatus(Loc.T("Ready when you are", "جاهز عندما تكون مستعدًا")); }
+            if (ReferenceEquals(chat, c.Current) && !string.IsNullOrWhiteSpace(transcript)) await OpenAskWithPrompt(transcript, false);
         }
     }
 
@@ -679,6 +724,7 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
     {
         if (c.Busy) { ((App)Application.Current).StopAll(); return; }
         if (string.IsNullOrWhiteSpace(inlineInput.Text)) return;
+        var chat = c.Current;
         string q = inlineInput.Text.Trim(); int before = c.Current.Messages.Count;
         c.Mode = inlineMode; inlineInput.Clear(); inlineQuestionLabel.Text = q;
         try
@@ -686,10 +732,11 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
             var request = c.SendAsync(q, allowPlanning: allowPlanning);
             if (c.Busy) { inlineReplyBox.Visibility = Visibility.Visible; inlineReply.Text = IsAr ? "جاري التفكير…" : "Thinking…"; replyPoll.Start(); AnimateSize(true); }
             await request;
+            if (!ReferenceEquals(chat, c.Current)) return;
             if (c.Current.Messages.Count == before) { inlineInput.Text = q; inlineReply.Text = ""; inlineReplyBox.Visibility = Visibility.Collapsed; replyPoll.Stop(); AnimateSize(true); }
             else SyncInlineReply();
         }
-        catch (Exception ex) { inlineInput.Text = q; inlineReply.Text = ex.Message; inlineReplyBox.Visibility = Visibility.Visible; replyPoll.Stop(); AnimateSize(true); }
+        catch (Exception ex) { if (!ReferenceEquals(chat, c.Current)) return; inlineInput.Text = q; inlineReply.Text = ex.Message; inlineReplyBox.Visibility = Visibility.Visible; replyPoll.Stop(); AnimateSize(true); }
     }
 
     private void SyncInlineReply()
@@ -1057,9 +1104,18 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         Motion.AnimateTo(bottomGlow, UIElement.OpacityProperty, opacity, IsVisible ? 160 : 0);
     }
 
+    private Conversation? displayedChat;
     private void Update()
     {
         if (closed) return;
+        if (!ReferenceEquals(displayedChat, c.Current))
+        {
+            displayedChat = c.Current;
+            inlineInput.Clear();
+            inlineQuestionLabel.Text = "";
+            inlineReply.Text = "";
+            inlineReplyBox.Visibility = Visibility.Collapsed;
+        }
         if (!Motion.Enabled && !IsExpanded && collapseContent.IsEnabled)
         {
             collapseContent.Stop(); expandedHost.Visibility = Visibility.Collapsed;
@@ -1083,7 +1139,7 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         string nextStatus = c.Store.Incognito ? (IsAr ? "وضع خفي · بدون حفظ" : "Incognito · screen paused") : accountTalk ? c.Status : c.Voice.Recording ? (IsAr ? "نستمع…" : "Listening…") : speaking ? (IsAr ? "نتحدث…" : "Speaking…") : c.Busy ? (IsAr ? "نعمل معك…" : "Working with you…") : c.IsQuiet ? (IsAr ? "وضع هادئ" : "Quiet mode") : (IsAr ? "جاهزة على جهازك" : "Ready when you are");
         if (!string.Equals(status.Text, nextStatus, StringComparison.Ordinal)) status.Text = nextStatus;
 
-        string nextBannerText = c.Busy || accountTalk ? c.Status : c.Store.Incognito ? (IsAr ? "الوضع الخفي مفعّل · لا يتم حفظ المحادثات" : "Incognito active · history paused") : (IsAr ? "نيڤو جاهزة على هذا الجهاز · اسحب أي ملف لهنا" : "NIVO ready on this PC · drop any file here");
+        string nextBannerText = c.Busy || accountTalk ? c.Status : c.Store.Incognito ? (IsAr ? "الوضع الخفي مفعّل · لا يتم حفظ المحادثات" : "Incognito active · history paused") : (IsAr ? "اسحب مستند أو صورة أو فيديو هنا" : "Drop documents, photos or videos here");
         if (!string.Equals(statusBannerText.Text, nextBannerText, StringComparison.Ordinal)) statusBannerText.Text = nextBannerText;
 
         string nextActionContent = c.Busy || accountTalk ? (IsAr ? "إيقاف" : "Stop") : c.Store.Incognito ? (IsAr ? "إيقاف الخفي" : "Incognito ON") : (IsAr ? "وضع خفي" : "Incognito");

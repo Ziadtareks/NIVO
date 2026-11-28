@@ -206,7 +206,6 @@ public sealed partial class MainWindow
         var accountPaths = new Dictionary<string, TextBox>();
         var knownModels = new[] { s.Model, s.FallbackModel, s.VisionModel, s.VisionFallbackModel }
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Concat(OpenCodeService.FreeModels)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var model = new ComboBox { IsEditable = true, ItemsSource = knownModels, Text = s.Model, FlowDirection = FlowDirection.LeftToRight };
@@ -383,10 +382,9 @@ public sealed partial class MainWindow
         }
 
         tabs["OpenCode AI"] = Ui.Stack(
-            AccountSettingsPanel(model, vision, () => SyncIsolation(false), MarkDirty, accountPaths),
             Section(
-                Loc.T("Model routing", "توجيه الموديلات"),
-                Loc.T("Choose a connected-account model above, an OpenCode catalog entry, or type provider/model. Fallbacks stay off unless configured.", "اختر موديل الحساب المتصل بالأعلى أو موديل OpenCode، أو اكتب provider/model. الموديل البديل لا يعمل إلا إذا حددته."),
+                Loc.T("Chat and image models", "موديلات المحادثة والصور"),
+                Loc.T("NIVO selects a free OpenCode chat model on first use. Choose another model here or connect an account below.", "نيڤو بيختار موديل OpenCode مجاني للمحادثة في أول تشغيل. تقدر تغيّره هنا أو تربط حساب من القسم اللي تحت."),
                 TwoCol(
                     Field(Loc.T("Chat & task planning", "المحادثة وتخطيط المهام"), model, Loc.T("Primary text model.", "الموديل الأساسي للنصوص.")),
                     Field(Loc.T("Text fallback (optional)", "البديل للنصوص (اختياري)"), fallback, Loc.T("Used only if primary hits quota / 429.", "يُستخدم فقط عند نفاد حصة الأساسي (429)."))),
@@ -395,7 +393,7 @@ public sealed partial class MainWindow
                     Field(Loc.T("Vision fallback (optional)", "بديل الصور (اختياري)"), visionFallback, Loc.T("Dedicated image-capable backup only.", "بديل مخصص للصور فقط (لا يُستخدم بديل النص)."))),
                 Notice(Ui.Text(Loc.T("Images go to the selected provider when you send a question or choose an image action. An optional confirmation is available in Desktop settings.", "تُرسل الصور للمزوّد المختار عند إرسال سؤالك أو اختيار إجراء للصورة. يمكنك تفعيل تأكيد اختياري من إعدادات سطح المكتب."), 12, "#9CB3C3"))),
             Section(
-                Loc.T("Provider isolation & OpenCode CLI", "عزل المزوّدات وـ OpenCode CLI"),
+                Loc.T("OpenCode connection", "اتصال OpenCode"),
                 Loc.T("Choose whether OpenCode can use your configured providers and logins, or stay strictly isolated to built-in free models.", "اختر ما إذا كان بإمكان OpenCode استخدام مزوّداتك وحساباتك، أو البقاء معزولًا على الموديلات المجانية المدمجة فقط."),
                 useUserConfig,
                 freeOnly,
@@ -405,6 +403,7 @@ public sealed partial class MainWindow
                     Ui.Btn(Loc.T("Choose executable", "اختيار الملف"), () => { var path = Ui.PickFile("OpenCode executable|opencode.exe"); if (path != null) cli.Text = path; }),
                     Ui.AsyncBtn(Loc.T("Refresh models & check CLI", "تحديث الموديلات وفحص CLI"), () => RefreshCatalogAsync(showErrorDialog: true))),
                 diagnosticBox),
+            AccountSettingsPanel(model, vision, () => SyncIsolation(false), MarkDirty, accountPaths),
             Section(
                 Loc.T("Gemini · Google AI Studio", "Gemini · Google AI Studio"),
                 Loc.T("Optional key passed only to OpenCode when user providers are enabled. Google account quotas and billing determine Free Tier eligibility.", "مفتاح اختياري يُمرّر إلى OpenCode فقط عند تفعيل مزوّدات المستخدم. الحصة المجانية والتكلفة حسب حساب Google."),
@@ -607,6 +606,9 @@ public sealed partial class MainWindow
             voiceAccountProvider.Items.Add(new ComboBoxItem { Tag = item.Item1, Content = item.Item2 });
         voiceAccountProvider.SelectedItem = voiceAccountProvider.Items.Cast<ComboBoxItem>().FirstOrDefault(i => string.Equals((string)i.Tag, s.VoiceAccountProvider, StringComparison.OrdinalIgnoreCase)) ?? voiceAccountProvider.Items[0];
         voiceAccountProvider.SelectionChanged += (_, _) => MarkDirty();
+        var matchLanguage = OptionToggle(Loc.T("Match my spoken language", "الرد بنفس اللغة اللي بتكلم بيها"),
+            Loc.T("Switch reply language as you speak. Turn off to prefer the interface language. Applies to the next Talk session.", "لو غيّرت لغتك وسط الكلام، الرد يتغيّر معاك. اقفل الاختيار لو تفضّل لغة الواجهة. التغيير يبدأ مع مكالمة Talk الجاية."),
+            s.MatchSpokenLanguage, "MatchSpokenLanguage");
         var accountVoice = OptionToggle(
             Loc.T("Talk with my connected account (experimental)", "Talk بصوت حسابي المتصل (تجريبي)"),
             Loc.T("Uses the connected account’s native voice inside NIVO. Press Talk to connect, then press it again to stop. Account voice availability applies. No separate API fallback.", "يستخدم صوت الحساب المتصل الأصلي داخل نيڤو. اضغط Talk للاتصال، ثم اضغطه مجددًا للإيقاف. يتطلب إتاحة الصوت للحساب. لا يتحوّل إلى API منفصل تلقائيًا."),
@@ -630,7 +632,7 @@ public sealed partial class MainWindow
             Section(
                 Loc.T("Native account Talk", "Talk بصوت الحساب الأصلي"),
                 Loc.T("Voice starts from this app after the provider confirms the session. Antigravity runs privately in the background; its transcript is not mirrored into NIVO chat and it is unavailable in Incognito. Account quotas apply. Stop with Talk again or Escape. Computer actions use the normal reviewed text task flow.", "يبدأ الصوت من داخل البرنامج بعد تأكيد المزوّد للجلسة. يعمل Antigravity في الخلفية؛ نص محادثته لا يُنسخ إلى شات نيڤو وهو غير متاح في الوضع الخفي. تُطبّق حصة الحساب. للإيقاف اضغط Talk مجددًا أو Escape. أوامر الجهاز تُنفّذ من مسار المهام النصية المعتاد بمراجعة الخطة."),
-                accountVoice,
+                accountVoice, matchLanguage,
                 Field(Loc.T("Voice account", "حساب الصوت"), voiceAccountProvider,
                     Loc.T("Auto checks the last account you connected, then the other connected account. This is separate from the saved text-model preference.", "التلقائي يفحص آخر حساب ربطته ثم الحساب الآخر المتاح. الاختيار منفصل عن تفضيل موديل المحادثة المحفوظ.")),
                 Ui.InterruptibleAsyncBtn(Loc.T("Start / stop Talk", "بدء / إيقاف Talk"), async () => await ((App)Application.Current).ToggleAccountTalkAsync())),
@@ -779,6 +781,7 @@ public sealed partial class MainWindow
             bool langChanged = !string.Equals(s.Language, nextLang, StringComparison.OrdinalIgnoreCase);
             s.Language = nextLang;
             s.UseUserOpenCodeConfig = validation.UseUserOpenCodeConfig; s.FreeModelsOnly = validation.FreeModelsOnly;
+            if (s.Model != nextModel) s.PendingModelDiscovery = false;
             s.Model = nextModel; s.FallbackModel = nextFallback; s.VisionModel = nextVision; s.VisionFallbackModel = nextVisionFallback; s.CliPath = cli.Text.Trim();
             s.CodexCliPath = accountPaths["codex"].Text.Trim(); s.AntigravityCliPath = accountPaths["antigravity"].Text.Trim();
             bool accessWasEnabled = s.ComputerAccessEnabled; s.ComputerAccessEnabled = computerAccess.IsChecked == true;
@@ -786,6 +789,7 @@ public sealed partial class MainWindow
             s.DesktopEnabled = dock.IsChecked == true; s.ReplaceTaskbar = replace.IsChecked == true; s.Focus = focus.IsChecked == true; s.FocusProfile = (focusProfile.SelectedItem as ComboBoxItem)?.Tag as string ?? "General"; s.Gaming = gaming.IsChecked == true; s.Proactive = proactive.IsChecked == true; s.ErrorAwareness = errorAwareness.IsChecked == true; s.ScanSeconds = seconds; s.EdgeGlow = edgeGlow.IsChecked == true; s.DistractionKeywords = distractions.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(k => k.Trim()).Where(k => k.Length > 0).ToList();
             s.Hover = hover.IsChecked == true; s.ConfirmImageSharing = confirmImageSharing.IsChecked == true;
             s.ExcludedApps = excluded.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim().ToLowerInvariant()).ToList();
+            s.MatchSpokenLanguage = matchLanguage.IsChecked == true;
             s.UseAccountVoice = accountVoice.IsChecked == true;
             s.VoiceAccountProvider = (voiceAccountProvider.SelectedItem as ComboBoxItem)?.Tag as string ?? "Auto";
             s.VoiceEnabled = enabled.IsChecked == true; s.TtsEndpoint = tts.Text.Trim(); s.SttEndpoint = stt.Text.Trim(); s.TtsModel = ttsModel.Text.Trim(); s.SttModel = sttModel.Text.Trim(); s.Voice = voice.Text.Trim();

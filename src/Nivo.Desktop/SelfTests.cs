@@ -1,4 +1,4 @@
-﻿using Nivo.Core;
+using Nivo.Core;
 using Nivo.Services;
 using Nivo.UI;
 using System.Windows.Media.Imaging;
@@ -33,7 +33,77 @@ internal static class SelfTests
         string fixture = Path.GetFullPath("tests/Nivo.FixtureCli/bin/Release/net10.0/Nivo.FixtureCli.exe");
         Check(File.Exists(fixture), "Assistant protocol fixture is available");
         var store = new Store(Path.Combine(root, "data")); store.Data.Settings.CliPath = fixture; store.Data.Settings.Language = "English";
+        var discovered = await new OpenCodeService(store).ModelsAsync(CancellationToken.None, freeOnlyOverride: true);
+        var firstRun = new Store(Path.Combine(root, "first-run"));
+        firstRun.Data.Settings.Model = "opencode/retired-free";
+        firstRun.Data.Settings.CliPath = fixture;
+        var setup = new OpenCodeService(firstRun);
+        var discovery = setup.StartModelDiscoveryAsync(CancellationToken.None);
+        Check(firstRun.Data.Settings.PendingModelDiscovery && ReferenceEquals(discovery, setup.StartModelDiscoveryAsync(CancellationToken.None)), "A fresh profile starts a single model catalog lookup");
+        await discovery;
+        var reopened = new Store(firstRun.Root);
+        Check(!reopened.Data.Settings.PendingModelDiscovery && reopened.Data.Settings.Model == discovered.First(), "First run replaces an unavailable default with a real free catalog entry and persists the choice");
+        reopened.Data.Settings.Model = "codex/selected-by-user";
+        await new OpenCodeService(reopened).StartModelDiscoveryAsync(CancellationToken.None);
+        Check(reopened.Data.Settings.Model == "codex/selected-by-user", "Returning users keep their own selected model");
+
+        string dropFile = Path.Combine(root, "island-drop.txt");
+        File.WriteAllText(dropFile, "Original content");
+        var dropWindow = new IslandWindow(new Controller(firstRun)) { Left = -16000, Top = -16000, ShowActivated = false };
+        try
+        {
+            dropWindow.Show(); dropWindow.UpdateLayout();
+            var source = Descendants<TextBlock>(dropWindow).First(t => t.IsVisible);
+            var data = new System.Windows.DataObject(DataFormats.FileDrop, new[] { dropFile });
+            DragEventArgs Drag(RoutedEvent routed, DragDropEffects allowed)
+            {
+                var ctor = typeof(DragEventArgs).GetConstructors(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .Single(c => c.GetParameters().Length == 5);
+                var args = (DragEventArgs)ctor.Invoke([data, DragDropKeyStates.None, allowed, source, new Point(5, 5)]);
+                args.RoutedEvent = routed;
+                source.RaiseEvent(args);
+                return args;
+            }
+            Check(Drag(DragDrop.PreviewDragEnterEvent, DragDropEffects.Copy | DragDropEffects.Move).Effects == DragDropEffects.Copy &&
+                dropWindow.ActiveView == "drop", "Dragging a file over a nested Island element previews a copy");
+            var accepted = Drag(DragDrop.PreviewDropEvent, DragDropEffects.Copy | DragDropEffects.Move);
+            Check(accepted.Handled && accepted.Effects == DragDropEffects.Copy && File.ReadAllText(dropFile) == "Original content" &&
+                Descendants<Button>(dropWindow).Any(b => b.IsVisible && Equals(b.Content, Loc.T("Ask about it", "اسأل عنها"))),
+                "Releasing over an Island child commits the file, exposes actions and tells Explorer to preserve the source");
+            Check(Drag(DragDrop.PreviewDropEvent, DragDropEffects.Move).Effects == DragDropEffects.None, "The Island declines move-only drops");
+        }
+        finally { dropWindow.Close(); }
+        Check(discovered.Contains("opencode/fixture-new-free") && !discovered.Contains("opencode/gpt-6.2-sol") &&
+            !OpenCodeService.IsFree("other/fixture-new-free") && !OpenCodeService.IsFree("opencode/other/nested-free"),
+            "Strict catalog accepts newly advertised free models only from the built-in OpenCode provider");
+        var oldFixtureMode = Environment.GetEnvironmentVariable("NIVO_FIXTURE_OPENCODE_V1");
+        try
+        {
+            Environment.SetEnvironmentVariable("NIVO_FIXTURE_OPENCODE_V1", "1");
+            var legacyStore = new Store(Path.Combine(root, "legacy-opencode"));
+            legacyStore.Data.Settings.CliPath = fixture;
+            legacyStore.Data.Settings.FreeModelsOnly = true;
+            var legacy = new OpenCodeService(legacyStore);
+            legacyStore.Data.Settings.Model = (await legacy.ModelsAsync(CancellationToken.None)).Single(x => x == "opencode/fixture-new-free");
+            Check(await legacy.AskAsync("test", "Legacy reply", false, null, null, CancellationToken.None) == "Legacy reply",
+                "Legacy CLI discovers, selects and runs a free model with the correct agent permissions");
+        }
+        finally { Environment.SetEnvironmentVariable("NIVO_FIXTURE_OPENCODE_V1", oldFixtureMode); }
         var controller = new Controller(store);
+        var privacyStore = new Store(Path.Combine(root, "privacy"));
+        var privacyController = new Controller(privacyStore);
+        privacyController.AppendVoiceTranscript("user", "saved");
+        var savedChat = privacyController.Current;
+        privacyController.ToggleIncognito();
+        privacyController.OpenChat(savedChat);
+        privacyController.AppendVoiceTranscript("assistant", "private follow-up");
+        privacyStore.Save(); // An unrelated preferences save serializes the whole store.
+        Check(privacyController.Current.Messages.Count == 2 && new Store(privacyStore.Root).Data.Conversations.Single().Messages.Count == 1,
+            "Continuing a saved chat in Incognito never writes its private follow-up to disk");
+        privacyController.Draft = "old question"; privacyController.Attachments.Add("old source");
+        privacyController.OpenChat(savedChat);
+        Check(privacyController.Draft.Length == 0 && privacyController.Attachments.Count == 0,
+            "Switching conversations clears the previous draft and attachments");
         await controller.SendAsync("FIXTURE_WINDOWS_SYSTEM");
         Check(controller.Current.Messages.Last().Text == "WINDOWS_POLICY_OK" && !controller.Busy, "Windows policy and runtime metadata reach an ordinary chat through the real CLI protocol");
         controller.NewChat(); controller.Mode = "Agent";
@@ -579,6 +649,11 @@ internal static class SelfTests
         }
         Ui.ApplyTheme("Frost"); window.Navigate("Assistant"); window.UpdateLayout();
         var chat = Descendants<ChatView>(window).Single();
+        var visibleComposer = Descendants<ChatComposer>(chat).Single();
+        visibleComposer.SetDraft("previous conversation draft");
+        controller.NewChat();
+        Check(!Descendants<TextBox>(visibleComposer).Any(box => box.Text == "previous conversation draft"),
+            "Starting another conversation clears the draft in the visible composer");
         var streamedMessage = new ChatMessage { Role = "assistant", Text = "First chunk" }; controller.Current.Messages.Add(streamedMessage); controller.Notify();
         for (int i = 0; i < 20 && !Descendants<TextBox>(chat).Any(t => t.Text == "First chunk"); i++) { await Task.Delay(50); window.UpdateLayout(); }
         var originalText = Descendants<TextBox>(chat).Single(t => t.Text == "First chunk");
@@ -781,9 +856,9 @@ internal static class SelfTests
             File.WriteAllLines(Path.Combine(root, "inline-layout-elements.txt"), Descendants<FrameworkElement>(longIsland).Where(e => e.IsVisible && e is TextBox or StackPanel or Border).Select(e => $"{e.GetType().Name}: actual={e.ActualWidth}x{e.ActualHeight}, desired={e.DesiredSize.Width}x{e.DesiredSize.Height}"));
             Check(rememberButton.TranslatePoint(new Point(0, rememberButton.ActualHeight), longFrame).Y <= longFrame.ActualHeight - longFrame.Padding.Bottom && controller.Current.Messages.First().Text == longQuestion, "Long inline questions and answers keep footer actions inside the island while preserving the full question"); longIsland.Close();
             var imagePlan = await tasks.PlanAsync("FIXTURE_IMAGE_PLAN", "", [], CancellationToken.None, imagePath); Check(imagePlan.Summary == "Image plan", "Image task planning forwards the attachment and selects the vision model at the CLI boundary");
-            var allCatalog = await ai.ModelsAsync(CancellationToken.None); Check(allCatalog.Length == 4 && allCatalog.Contains("google/gemini-3.5-flash-lite"), "Configured Google credentials reach standalone catalog discovery alongside other valid models");
+            var allCatalog = await ai.ModelsAsync(CancellationToken.None); Check(allCatalog.Length == 5 && allCatalog.Contains("google/gemini-3.5-flash-lite"), "Configured Google credentials reach standalone catalog discovery alongside other valid models");
             store.Data.Settings.FreeModelsOnly = true;
-            var freeCatalog = await ai.ModelsAsync(CancellationToken.None); Check(freeCatalog.Length == 2, "Strict free-only mode filters non-free catalog entries");
+            var freeCatalog = await ai.ModelsAsync(CancellationToken.None); Check(freeCatalog.Length == 3 && freeCatalog.Contains("opencode/fixture-new-free"), "Strict free-only mode filters non-free catalog entries");
             bool nonFreeBlocked = false; try { OpenCodeService.ValidateModel("opencode/gpt-6.2-sol", store.Data.Settings); } catch (InvalidOperationException) { nonFreeBlocked = true; } Check(nonFreeBlocked, "Strict free-only mode blocks non-free models");
             await ai.AskAsync("fixture", "No tools", false, null, null, CancellationToken.None);
             store.Data.Settings.FreeModelsOnly = false;

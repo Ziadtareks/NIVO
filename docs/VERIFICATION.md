@@ -1,6 +1,6 @@
 # Verification — 2026-11-28
 
-Status: version 1.10.0 native Talk hosted inside NIVO; hardware and live-provider acceptance testing remains in progress.
+Version 1.11.0 includes first-run OpenCode discovery, per-turn Talk language preferences and updated Island file handling. A fresh isolated profile selected and persisted an available free model from the installed CLI. Routed drag-and-drop checks cover nested controls and source preservation. Physical Explorer dragging, microphone playback and live provider responses remain unverified for this build.
 
 ## Build and local checks
 

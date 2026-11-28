@@ -2,6 +2,7 @@
 
 public sealed class Settings
 {
+    public bool PendingModelDiscovery { get; set; }
     public string Model { get; set; } = "opencode/deepseek-v4.1-flash-free";
     public string FallbackModel { get; set; } = "";
     public string VisionFallbackModel { get; set; } = "";
@@ -33,6 +34,7 @@ public sealed class Settings
     public bool ConfirmImageSharing { get; set; }
     public bool ComputerAccessEnabled { get; set; }
     public bool VoiceEnabled { get; set; }
+    public bool MatchSpokenLanguage { get; set; } = true;
     public bool UseAccountVoice { get; set; } = true;
     public string VoiceAccountProvider { get; set; } = "Auto";
     public string LastConnectedAccountProvider { get; set; } = "";

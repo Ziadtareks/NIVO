@@ -7,10 +7,29 @@ namespace Nivo.Services;
 
 public sealed class OpenCodeService(Store store)
 {
-    public static readonly string[] FreeModels = ["opencode/deepseek-v4.1-flash-free", "opencode/hy4-flash-free", "opencode/mimo-v2.6-flash-free", "opencode/nemotron-3.5-super-vl-free", "opencode/nemotron-3.5-lightning-free", "opencode/beam-free", "opencode/flint-40b-free", "opencode/iceman-free", "opencode/tidepool-alpha-free", "opencode/big-pickle"];
+    private Task? firstRunDiscovery;
+    public Task StartModelDiscoveryAsync(CancellationToken ct) =>
+        firstRunDiscovery ??= DiscoverInitialModelAsync(ct);
+
+    private async Task DiscoverInitialModelAsync(CancellationToken ct)
+    {
+        var settings = store.Data.Settings;
+        if (!settings.PendingModelDiscovery) return;
+        string original = settings.Model, cli = settings.CliPath;
+        var catalog = await ModelsAsync(ct, cli, useUserConfigOverride: false, freeOnlyOverride: true);
+        ct.ThrowIfCancellationRequested();
+        if (!settings.PendingModelDiscovery || settings.Model != original || settings.CliPath != cli) return;
+        if (catalog.Length == 0) throw new InvalidOperationException(Loc.T("OpenCode returned no free models.", "OpenCode لم يرجع أي موديلات مجانية."));
+        if (!catalog.Contains(original, StringComparer.Ordinal)) settings.Model = catalog[0];
+        settings.PendingModelDiscovery = false;
+        store.Save();
+    }
+    private readonly ConcurrentDictionary<string, (DateTime Modified, bool Standalone)> cliCapabilities = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTimeOffset> cooldowns = new(StringComparer.Ordinal);
     public readonly record struct ErrorEventInfo(string Raw, string? Type, int? StatusCode, TimeSpan? RetryAfter);
-    public static bool IsFree(string model) => FreeModels.Contains(model, StringComparer.Ordinal);
+    public static bool IsFree(string model) => model == "opencode/big-pickle" ||
+        (IsValidModelId(model) && model.StartsWith("opencode/", StringComparison.Ordinal) &&
+         model.LastIndexOf('/') == "opencode".Length && model.EndsWith("-free", StringComparison.Ordinal));
     public static bool IsGoogleModel(string? model) => !string.IsNullOrWhiteSpace(model) && model.Trim().StartsWith("google/", StringComparison.OrdinalIgnoreCase);
     public static bool IsValidModelId(string? model)
     {
@@ -69,10 +88,15 @@ public sealed class OpenCodeService(Store store)
     {
         var settings = store.Data.Settings;
         bool restrict = (freeOnlyOverride ?? settings.FreeModelsOnly) || !(useUserConfigOverride ?? settings.UseUserOpenCodeConfig);
-        var start = StartInfo(cliPathOverride ?? settings.CliPath, restrict, requireGoogleSecret: false); start.ArgumentList.Add("models"); start.ArgumentList.Add("--standalone");
+        var start = StartInfo(cliPathOverride ?? settings.CliPath, restrict, requireGoogleSecret: false);
+        bool standalone = await SupportsStandaloneAsync(start.FileName, ct);
+        start.ArgumentList.Add("models");
+        if (standalone) start.ArgumentList.Add("--standalone");
+        else if (restrict) start.ArgumentList.Add("opencode");
         // Catalog discovery must not inherit the last inference request's enabled_providers filter.
         // It also needs its own server so newly saved credentials reach the provider process.
-        string catalog = Path.Combine(store.Root, "catalog"), configDirectory = Path.Combine(catalog, ".opencode");
+        string catalog = Path.Combine(store.Root, standalone ? "catalog" : "catalog-v1", restrict ? "free" : "user");
+        string configDirectory = standalone ? Path.Combine(catalog, ".opencode") : catalog;
         Directory.CreateDirectory(configDirectory); start.WorkingDirectory = catalog;
         var catalogConfig = new Dictionary<string, object> { ["$schema"] = "https://opencode.ai/config.json" };
         if (restrict) catalogConfig["enabled_providers"] = new[] { "opencode" };
@@ -90,6 +114,26 @@ public sealed class OpenCodeService(Store store)
         if (restrict) entries = entries.Where(IsFree);
         return entries.Distinct(StringComparer.Ordinal).ToArray();
     }
+    private async Task<bool> SupportsStandaloneAsync(string executable, CancellationToken ct)
+    {
+        var modified = File.GetLastWriteTimeUtc(executable);
+        if (cliCapabilities.TryGetValue(executable, out var cached) && cached.Modified == modified) return cached.Standalone;
+        var probe = StartInfo(executable, restrict: true, requireGoogleSecret: false);
+        probe.ArgumentList.Add("run");
+        probe.ArgumentList.Add("--help");
+        using var process = Process.Start(probe) ?? throw new InvalidOperationException("Cannot inspect OpenCode CLI.");
+        using var cancellation = ct.Register(() => StopProcess(process));
+        process.StandardInput.Close();
+        var stdout = process.StandardOutput.ReadToEndAsync(ct);
+        var stderr = process.StandardError.ReadToEndAsync(ct);
+        await process.WaitForExitAsync(ct);
+        string help = await stdout + await stderr;
+        if (process.ExitCode != 0 || !help.Contains("--format") || !help.Contains("--agent"))
+            throw new InvalidOperationException("The selected executable does not expose the required OpenCode run command.");
+        bool standalone = help.Contains("--standalone");
+        cliCapabilities[executable] = (modified, standalone);
+        return standalone;
+    }
     private ProcessStartInfo StartInfo(string cliPath, bool restrict, bool requireGoogleSecret)
     {
         var info = new ProcessStartInfo(FindExecutable(cliPath)) {
@@ -102,6 +146,7 @@ public sealed class OpenCodeService(Store store)
             info.Environment.Remove(key);
         if (restrict)
         {
+            info.Environment.Remove("OPENCODE_AUTH_CONTENT");
             foreach (var kind in new[] { "CONFIG", "DATA", "STATE", "CACHE" })
                 info.Environment["XDG_" + kind + "_HOME"] = Path.Combine(store.Runtime, "cli-" + kind.ToLowerInvariant());
             // Do not inherit paid credentials when locked to built-in free OpenCode models.
@@ -133,7 +178,7 @@ public sealed class OpenCodeService(Store store)
         }
         return info;
     }
-    private void Configure(string model, string system, bool web)
+    private void Configure(string model, string system, bool web, bool standalone, string directory)
     {
         var settings = store.Data.Settings;
         ValidateModel(model, settings);
@@ -152,8 +197,18 @@ public sealed class OpenCodeService(Store store)
         };
         if (RestrictToFree(settings)) config["enabled_providers"] = new[] { "opencode" };
         // A private working directory avoids reading instructions from the user's projects.
-        Directory.CreateDirectory(Path.Combine(store.Runtime, ".opencode"));
-        File.WriteAllText(Path.Combine(store.Runtime, ".opencode", "opencode.json"), JsonSerializer.Serialize(config));
+        if (!standalone)
+        {
+            var permission = new Dictionary<string, string> { ["*"] = "deny" };
+            var agentPermission = new Dictionary<string, string>(permission);
+            if (web) agentPermission["websearch"] = "allow";
+            config.Remove("agents"); config.Remove("permissions"); config.Remove("plugins"); config.Remove("websearch");
+            config["permission"] = permission;
+            config["agent"] = new Dictionary<string, object> { ["nivo-local"] = new { model, mode = "primary", prompt = system, permission = agentPermission } };
+        }
+        var configDir = standalone ? Path.Combine(directory, ".opencode") : directory;
+        Directory.CreateDirectory(configDir);
+        File.WriteAllText(Path.Combine(configDir, "opencode.json"), JsonSerializer.Serialize(config));
     }
     private sealed class QuotaLimitException(string message, TimeSpan? retryAfter) : InvalidOperationException(message)
     {
@@ -259,6 +314,11 @@ public sealed class OpenCodeService(Store store)
     }
     public async Task<string> AskAsync(string prompt, string system, bool vision, string? image, Action<string>? onText, CancellationToken ct, bool web = false, Action<string>? onStatus = null)
     {
+        if (firstRunDiscovery is { IsCompleted: false } discovery)
+        {
+            try { await discovery.WaitAsync(ct); }
+            catch (Exception ex) when (!ct.IsCancellationRequested && (ex is IOException or InvalidOperationException or OperationCanceledException or System.ComponentModel.Win32Exception)) { Trace.TraceWarning("Initial model discovery ended: {0}", ex.GetType().Name); }
+        }
         var settings = store.Data.Settings;
         var primary = (vision ? settings.VisionModel : settings.Model).Trim();
         ValidateModel(primary, settings);
@@ -308,9 +368,14 @@ public sealed class OpenCodeService(Store store)
             if (web) accountSystem += "\nThis connected-account transport has no web-search tool. Clearly state when current web verification is unavailable; do not invent search results.";
             return await AccountConnections.AskAsync(store, model, prompt, accountSystem, image, onText, ct);
         }
-        Configure(model, system, web);
         var info = StartInfo(store.Data.Settings.CliPath, RestrictToFree(store.Data.Settings), requireGoogleSecret: IsGoogleModel(model));
-        foreach (var arg in new[] { "run", "--standalone", "--archived", "--format", "json", "--agent", "nivo-local", "--model", model, "--title", "NIVO Local" }) info.ArgumentList.Add(arg);
+        bool standalone = await SupportsStandaloneAsync(info.FileName, ct);
+        if (!standalone) info.WorkingDirectory = Path.Combine(store.Root, "run-v1");
+        Configure(model, system, web, standalone, info.WorkingDirectory);
+        info.ArgumentList.Add("run");
+        if (standalone) { info.ArgumentList.Add("--standalone"); info.ArgumentList.Add("--archived"); }
+        else info.ArgumentList.Add("--pure");
+        foreach (var arg in new[] { "--format", "json", "--agent", "nivo-local", "--model", model, "--title", "NIVO Local" }) info.ArgumentList.Add(arg);
         if (image != null) { info.ArgumentList.Add("--file"); info.ArgumentList.Add(image); }
         string? payloadFile = null;
         if (prompt.Length > 12000)
@@ -413,9 +478,12 @@ public sealed class OpenCodeService(Store store)
         localTime = DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture),
         timeZone = TimeZoneInfo.Local.Id
     });
-    public static string SystemPrompt(Settings settings, bool planningMode = false) => $"""
+    internal static string TalkLanguageInstruction(Settings settings) => settings.MatchSpokenLanguage
+        ? "For every spoken turn, reply in the language the speaker is using now. Switch languages when the speaker switches. Match their dialect where possible. Follow explicit requests for a different reply language. If speech is unclear, ask for clarification in the last clear spoken language."
+        : "Give spoken replies in " + (settings.Language == "Arabic" ? "Arabic" : "English") + " unless the speaker explicitly requests another language.";
+    public static string SystemPrompt(Settings settings, bool planningMode = false, bool liveTalk = false) => $"""
         You are NIVO Local, a practical Windows desktop assistant and experienced Windows support engineer.
-        Reply in the user's language ({settings.Language} preferred); use natural Egyptian Arabic when the user uses it.
+        {(liveTalk ? TalkLanguageInstruction(settings) : $"Reply in the user's language ({settings.Language} preferred); use natural Egyptian Arabic when the user uses it.")}
         Persona: {PersonaStyle(settings.Persona)} Be warm, concise and precise. Expertise means good diagnosis, not claiming to know every fact or to have access you lack.
 
         WINDOWS SUPPORT

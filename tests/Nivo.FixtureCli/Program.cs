@@ -1,5 +1,12 @@
 using System.Text.Json;
 
+bool legacyOpenCode = Environment.GetEnvironmentVariable("NIVO_FIXTURE_OPENCODE_V1") == "1";
+if (args.SequenceEqual(new[] { "run", "--help" }))
+{
+    Console.WriteLine(legacyOpenCode ? "run --pure --format --agent" : "run --standalone --format --agent");
+    return;
+}
+
 // Native voice process fixture: no audio devices, sockets, or visible windows.
 if (args.Contains("--version"))
 {
@@ -58,17 +65,27 @@ if (args.Contains("app-server") || args.Contains("acp"))
 
 if (args.Contains("models"))
 {
-    if (!args.Contains("--standalone")) throw new Exception("Catalog must use the supplied credential/config environment instead of an existing server");
-    Console.WriteLine("opencode/deepseek-v4.1-flash-free\nopencode/nemotron-3.5-super-vl-free\nopencode/gpt-6.2-sol");
-    string configPath = Path.Combine(Environment.CurrentDirectory, ".opencode", "opencode.json");
+    if (args.Contains("--standalone") == legacyOpenCode) throw new Exception("Wrong catalog flags for this CLI");
+    Console.WriteLine("opencode/deepseek-v4.1-flash-free\nopencode/nemotron-3.5-super-vl-free\nopencode/gpt-6.2-sol\nopencode/fixture-new-free");
+    string configPath = Path.Combine(Environment.CurrentDirectory, legacyOpenCode ? "" : ".opencode", "opencode.json");
     using var catalogConfig = JsonDocument.Parse(File.ReadAllText(configPath));
     bool providerRestricted = catalogConfig.RootElement.TryGetProperty("enabled_providers", out var enabled) && !enabled.EnumerateArray().Any(x => x.GetString() == "google");
     if (!providerRestricted && Environment.GetEnvironmentVariable("GOOGLE_API_KEY") == "synthetic-google-key-for-fixture") Console.WriteLine("google/gemini-3.5-flash-lite");
     return;
 }
-var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(Environment.CurrentDirectory, ".opencode", "opencode.json"))).RootElement;
+var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(Environment.CurrentDirectory, legacyOpenCode ? "" : ".opencode", "opencode.json"))).RootElement;
 var modelIndex = Array.IndexOf(args, "--model");
 if (modelIndex < 0 || args[modelIndex + 1] != config.GetProperty("model").GetString()) throw new Exception("Explicit model/config mismatch");
+if (legacyOpenCode)
+{
+    var agent = config.GetProperty("agent").GetProperty("nivo-local");
+    if (args.Contains("--standalone") || args.Contains("--archived") || !args.Contains("--pure") ||
+        agent.GetProperty("permission").GetProperty("*").GetString() != "deny" ||
+        config.GetProperty("permission").GetProperty("*").GetString() != "deny")
+        throw new Exception("Legacy OpenCode CLI invocation or agent permissions are incorrect");
+    Console.WriteLine(JsonSerializer.Serialize(new { type = "text", part = new { text = agent.GetProperty("prompt").GetString() } }));
+    return;
+}
 if (config.GetProperty("agents").GetProperty("nivo-local").GetProperty("permissions")[0].GetProperty("effect").GetString() != "deny") throw new Exception("Tools were not denied");
 if (config.GetProperty("agents").GetProperty("nivo-local").GetProperty("steps").GetInt32() < 2) throw new Exception("First request would receive an unsupported final-step assistant prefill");
 if (!args.Contains("--title") || !args.Contains("--standalone")) throw new Exception("Maintenance/title safeguards missing");

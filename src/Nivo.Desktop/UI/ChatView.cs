@@ -25,7 +25,7 @@ public sealed class ChatView : DockPanel, IDisposable
     private void Render()
     {
         bool atBottom = scroll.ScrollableHeight - scroll.VerticalOffset < 45;
-        if (conversation != c.Current.Id) { conversation = c.Current.Id; rows.Clear(); messages.Children.Clear(); welcome = null; }
+        if (conversation != c.Current.Id) { atBottom = true; conversation = c.Current.Id; rows.Clear(); messages.Children.Clear(); welcome = null; }
         if (c.Current.Messages.Count == 0 && welcome == null)
         {
             var mark = Ui.Orb(64); mark.HorizontalAlignment = HorizontalAlignment.Left;

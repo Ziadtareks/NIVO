@@ -205,7 +205,7 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
 
         try
         {
-            scope = PrepareVoiceSessionScope(profileRoot, acpDirectory);
+            scope = PrepareVoiceSessionScope(profileRoot, acpDirectory, OpenCodeService.TalkLanguageInstruction(store.Data.Settings));
             int micPort = AllocateLoopbackPort();
 
             SafeNotifyStatus(onStatus, Loc.T(
@@ -596,7 +596,7 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
         return psi;
     }
 
-    private static VoiceSessionScope PrepareVoiceSessionScope(string profileRoot, string acpDirectory)
+    private static VoiceSessionScope PrepareVoiceSessionScope(string profileRoot, string acpDirectory, string languageInstruction)
     {
         string sessionId = Guid.NewGuid().ToString("N");
         string sessionDir = Path.Combine(profileRoot, "voice-sessions", sessionId);
@@ -615,6 +615,8 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
 
         try
         {
+            // Only the language preference belongs in this workspace, never the NIVO chat history.
+            File.WriteAllText(Path.Combine(workspaceDir, "AGENTS.md"), languageInstruction, Utf8NoBom);
             // Disable swarm plugin and prevent legacy migration inside the isolated session home.
             var configPayload = new
             {

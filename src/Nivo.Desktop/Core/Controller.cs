@@ -59,12 +59,32 @@ public sealed class Controller
         SaveChat(); Notify();
     }
     public void Stop() { cancellation?.Cancel(); }
-    private void StopOwnedAccountTalk() { if (Application.Current is App app && ReferenceEquals(app.Controller, this)) app.RequestAccountTalkStop(); }
-    public void NewChat() { if (Busy || confirming) return; StopOwnedAccountTalk(); Current = new(); Capture = null; Attachments.Clear(); Draft = ""; Notify(); }
-    public void OpenChat(Conversation chat) { if (Busy || confirming) return; StopOwnedAccountTalk(); Current = chat; Notify(); }
+    private void StopChatVoice()
+    {
+        Voice.CancelRecording();
+        if (Application.Current is App app && ReferenceEquals(app.Controller, this)) app.RequestAccountTalkStop();
+    }
+    public void NewChat() { if (Busy || confirming) return; StopChatVoice(); Current = new(); Capture = null; Attachments.Clear(); Draft = ""; Notify(); }
+    public void OpenChat(Conversation chat)
+    {
+        if (Busy || confirming || ReferenceEquals(Current, chat)) return;
+        StopChatVoice();
+        Current = Store.Incognito ? new Conversation
+        {
+            Title = chat.Title,
+            Messages = chat.Messages.Select(message => new ChatMessage
+            {
+                Role = message.Role, Text = message.Text, Created = message.Created
+            }).ToList()
+        } : chat;
+        Capture = null;
+        Attachments.Clear();
+        Draft = "";
+        Notify();
+    }
     public void ToggleIncognito()
     {
-        StopOwnedAccountTalk();
+        StopChatVoice();
         if (Busy) Stop(); Store.Incognito = !Store.Incognito;
         // Always start a separate in-memory conversation; do not append private turns to saved chats.
         Current = new(); Capture = null; Attachments.Clear(); Draft = ""; Notify();
@@ -112,7 +132,12 @@ public sealed class Controller
     public async Task SendAsync(string request, bool allowPlanning = true, string? referenceData = null)
     {
         if (Busy || confirming || string.IsNullOrWhiteSpace(request)) return;
-        if (Application.Current is App app && ReferenceEquals(app.Controller, this) && app.AccountTalkActive) await app.StopAccountTalkAsync();
+        var startingChat = Current;
+        if (Application.Current is App app && ReferenceEquals(app.Controller, this) && app.AccountTalkActive)
+        {
+            await app.StopAccountTalkAsync();
+            if (Busy || confirming || !ReferenceEquals(Current, startingChat)) return;
+        }
         string mode = Mode;
         if ((mode is "Screen" or "Crop") && Capture == null) throw new InvalidOperationException(Loc.T("Capture your screen or select an area first.", "التقط الشاشة أو قصّ جزءًا منها أولًا."));
         if (mode == "General" && request.Trim().StartsWith("/usual ", StringComparison.OrdinalIgnoreCase))
@@ -135,6 +160,7 @@ public sealed class Controller
         var captured = Capture; var files = Attachments.ToArray();
         if (captured != null && Store.Data.Settings.ConfirmImageSharing && !ConfirmRequest(ImageShareConsentMessage(), Loc.T("NIVO · Share this capture?", "نيڤو · مشاركة اللقطة؟"))) return;
         if (files.Length > 0 && !ConfirmRequest(Loc.T("Send the extracted content of these files to the selected model provider?\n\n" + string.Join("\n", files.Select(Path.GetFileName)), "إرسال المحتوى المستخرج من هذه الملفات إلى مزوّد الموديل المختار؟\n\n" + string.Join("\n", files.Select(Path.GetFileName))), Loc.T("NIVO · Share attachments?", "نيڤو · مشاركة المرفقات؟"))) return;
+        if (!ReferenceEquals(Current, startingChat)) return;
         bool planRequest = allowPlanning && (mode == "Agent" || (Store.Data.Settings.ComputerAccessEnabled && (mode is "General" or "Screen" or "Crop" or "Web" or "Game")));
         TaskActive = allowPlanning && mode == "Agent"; if (TaskActive) TaskSequence++;
         if (TaskActive) { TaskState = "Working"; TaskDetail = ""; }
@@ -229,7 +255,8 @@ public sealed class Controller
             foreach (var file in files) Attachments.Remove(file);
             TaskActive = false; Busy = false;
             if (ReferenceEquals(cancellation, requestCancellation)) cancellation = null;
-            SaveChat(); SetStatus("Ready when you are");
+            if (ReferenceEquals(Current, startingChat)) SaveChat();
+            SetStatus("Ready when you are");
             await FileService.CleanupRuntimeFileAsync(imageFile);
         }
     }

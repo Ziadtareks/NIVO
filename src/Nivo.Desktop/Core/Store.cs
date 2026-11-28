@@ -16,6 +16,7 @@ public sealed class Store
         Directory.CreateDirectory(Root); Directory.CreateDirectory(Runtime); Directory.CreateDirectory(Output);
         Data = new();
         var file = Path.Combine(Root, "data.json");
+        Data.Settings.PendingModelDiscovery = !File.Exists(file);
         if (File.Exists(file))
         {
             try { Data = JsonSerializer.Deserialize<AppData>(File.ReadAllText(file)) ?? new(); }

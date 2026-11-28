@@ -29,6 +29,7 @@ public partial class App : Application
     private bool applyingShellDecision;
     private ExternalSuppressionState externalSuppression = ExternalSuppressionState.None;
     internal void ControllerForTests(Controller c) { Controller = c; }
+    private readonly CancellationTokenSource startupDiscovery = new();
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -66,10 +67,26 @@ public partial class App : Application
             Controller.Suggestion += suggestion => ShowSuggestion(suggestion);
             Theme.Changed += () => { if (!Exiting) dock?.ApplyTheme(); };
             SetupTray(); RefreshShell(); shellTimer.Tick += ShellTimerTick; shellTimer.Start(); timer.Tick += TimerTick; timer.Start();
+            if (store.Data.Settings.PendingModelDiscovery) _ = PrepareFirstChatAsync();
         }
         catch (Exception ex) { Ui.Error(ex); Quit(); }
         DispatcherUnhandledException += (_, args) => { Ui.Error(args.Exception); args.Handled = true; };
         SessionEnding += (_, _) => Quit();
+    }
+    private async Task PrepareFirstChatAsync()
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(startupDiscovery.Token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            await Controller.Ai.StartModelDiscoveryAsync(timeout.Token);
+            if (!Exiting) Controller.Notify();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or OperationCanceledException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            System.Diagnostics.Trace.TraceWarning("First-run OpenCode discovery: {0}", ex.GetType().Name);
+            if (!Exiting && !Controller.Busy) Controller.SetStatus(Loc.T("Open Settings → AI & accounts to check OpenCode or choose a model.", "افتح الإعدادات ← الذكاء والحسابات لفحص OpenCode أو اختيار موديل."));
+        }
     }
     private void FinishSelfTest(int code)
     {
@@ -486,13 +503,13 @@ public partial class App : Application
         try
         {
             string file = await Controller.Voice.Speak(text, request.Token); if (request.IsCancellationRequested) { if (File.Exists(file)) File.Delete(file); return; }
-            voiceFile = file; player = new MediaPlayer(); player.MediaEnded += (_, _) => StopAudio(); player.MediaFailed += (_, _) => StopAudio(); player.Open(new Uri(voiceFile)); Controller.SetStatus("Speaking…"); player.Play();
+            voiceFile = file; player = new MediaPlayer(); player.MediaEnded += (source, _) => { if (ReferenceEquals(source, player)) StopAudio(); }; player.MediaFailed += (source, _) => { if (ReferenceEquals(source, player)) StopAudio(); }; player.Open(new Uri(voiceFile)); Controller.SetStatus("Speaking…"); player.Play();
         }
         finally { if (speechRequest == request) speechRequest = null; request.Dispose(); }
     }
     private void StopAudio()
     {
-        speechRequest?.Cancel(); player?.Stop(); player?.Close(); player = null;
+        speechRequest?.Cancel(); var previousPlayer = player; player = null; previousPlayer?.Stop(); previousPlayer?.Close();
         if (voiceFile != null && File.Exists(voiceFile)) { try { File.Delete(voiceFile); } catch { } } voiceFile = null;
         if (Controller != null && Controller.Status.StartsWith("Speaking", StringComparison.Ordinal)) Controller.SetStatus("Ready when you are");
     }
@@ -500,7 +517,7 @@ public partial class App : Application
     public async void Quit()
     {
         if (Exiting) return;
-        Exiting = true; shellTimer.Stop(); timer.Stop(); Controller?.Stop(); Controller?.Voice.CancelRecording(); StopAudio(); hotkeys?.Dispose(); TaskbarService.Restore();
+        Exiting = true; startupDiscovery.Cancel(); shellTimer.Stop(); timer.Stop(); Controller?.Stop(); Controller?.Voice.CancelRecording(); StopAudio(); hotkeys?.Dispose(); TaskbarService.Restore();
         try { await StopAccountTalkAsync(); }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or OperationCanceledException or TimeoutException)
         { System.Diagnostics.Trace.TraceWarning("NIVO voice shutdown during quit ended ({0}).", ex.GetType().Name); }

@@ -10,7 +10,7 @@
     <ApplicationIcon>../../assets/nivo.ico</ApplicationIcon>
     <AssemblyName>NIVO.Local</AssemblyName>
     <RootNamespace>Nivo</RootNamespace>
-    <Version>1.10.0</Version>
+    <Version>1.11.0</Version>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Copyright>Copyright (c) 2026 Ziad Tarek</Copyright>
     <!-- This is a WPF application; the WinForms analyzer cannot see WPF's manifest-based DPI setup. -->

@@ -252,6 +252,12 @@ internal static class AccountTests
         string nativeSessions = Path.Combine(store.Root, "accounts", "antigravity", "voice-sessions");
         string sessionDir = Directory.GetDirectories(nativeSessions).Single();
         string workspace = Path.Combine(sessionDir, "workspace");
+        var voiceSettings = new Settings { Language = "English" };
+        var spokenRule = OpenCodeService.TalkLanguageInstruction(voiceSettings);
+        Check(File.ReadAllText(Path.Combine(workspace, "AGENTS.md")) == spokenRule && spokenRule.Contains("every spoken turn"), "Antigravity receives the per-turn spoken language preference");
+        Check(OpenCodeService.SystemPrompt(voiceSettings, liveTalk: true).Contains(spokenRule) && !OpenCodeService.SystemPrompt(voiceSettings, liveTalk: true).Contains("English preferred"), "Codex Talk omits the interface-language preference");
+        voiceSettings.MatchSpokenLanguage = false;
+        Check(OpenCodeService.TalkLanguageInstruction(voiceSettings).Contains("in English"), "Talk can prefer the interface language");
         Check(File.Exists(Path.Combine(workspace, "verified")), "Native CLI reuses the isolated account through a junction with loopback audio forwarding");
         using (var nativeConsole = JsonDocument.Parse(File.ReadAllText(Path.Combine(workspace, "console-state.json"))))
         {
@@ -444,6 +450,10 @@ internal static class AccountTests
             store.Data.Settings.Language = language;
             var window = new MainWindow(new Controller(store)) { Width = 850, Height = 700, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -16000, Top = -16000 };
             window.Show(); window.Navigate("Settings", "OpenCode AI"); window.UpdateLayout();
+            var languageButton = Descendants<Button>(window).Single(b => Equals(b.Tag, "LanguageToggle"));
+            var modelButton = Descendants<Button>(window).Single(b => b.Content is string text && text.StartsWith("⚡ "));
+            Rect Bounds(Button b) => b.TransformToAncestor(window).TransformBounds(new Rect(b.RenderSize));
+            Check(!Bounds(languageButton).IntersectsWith(Bounds(modelButton)), language + " language switch and active model have separate hit targets at minimum width");
             var cards = Descendants<Border>(window).Where(b => b.Tag is string tag && tag.EndsWith("AccountCard")).ToArray();
             Check(cards.Length == 2 && cards.All(c => c.ActualWidth > 200), language + " Settings renders both connected-account cards at minimum window width");
             var save = Descendants<Button>(window).Single(b => Equals(b.Tag, "SavePreferences"));
@@ -452,6 +462,7 @@ internal static class AccountTests
             bitmap.Render(window); DesktopService.SavePng(bitmap, Path.Combine(root, "accounts-" + language + ".png"));
             window.Navigate("Settings", "Voice"); window.UpdateLayout();
             var voiceChoice = Descendants<ComboBox>(window).Single(c => Equals(c.Tag, "VoiceAccountProvider"));
+            Check(Descendants<CheckBox>(window).Single(c => Equals(c.Tag, "MatchSpokenLanguage")).IsChecked == true, language + " Talk language matching defaults on");
             Check(voiceChoice.Items.Count == 3 && voiceChoice.IsVisible && voiceChoice.ActualWidth > 100,
                 language + " Voice settings expose Auto, Codex and Antigravity independently of the text model");
             bitmap = new RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, PixelFormats.Pbgra32);

@@ -21,6 +21,7 @@ public sealed class ChatComposer : Border, IDisposable
     private readonly Button send;
     private readonly Button voice;
     private bool voiceShowsStop;
+    private (string Mode, bool Busy)? modeAppearance;
     private readonly StackPanel tools;
     public event Action? Submitted;
 
@@ -119,6 +120,7 @@ public sealed class ChatComposer : Border, IDisposable
     };
     private void Refresh()
     {
+        if (input.Text != c.Draft) input.Text = c.Draft;
         bool accountVoice = Application.Current is App app && app.AccountTalkActive;
         if (voiceShowsStop != accountVoice)
         {
@@ -128,7 +130,18 @@ public sealed class ChatComposer : Border, IDisposable
             System.Windows.Automation.AutomationProperties.SetName(voice, accountVoice ? Loc.T("Stop Talk", "إيقاف الصوت") : "Talk");
         }
 
-        foreach (var pair in modes) { pair.Value.SetResourceReference(Control.BackgroundProperty, pair.Key == c.Mode ? "ActiveGlass" : "Panel"); pair.Value.SetResourceReference(Control.ForegroundProperty, pair.Key == c.Mode ? "OnAccent" : "Ink"); pair.Value.FontWeight = pair.Key == c.Mode ? FontWeights.SemiBold : FontWeights.Normal; pair.Value.IsEnabled = !c.Busy; }
+        if (modeAppearance != (c.Mode, c.Busy))
+        {
+            modeAppearance = (c.Mode, c.Busy);
+            foreach (var (mode, button) in modes)
+            {
+                bool selected = mode == c.Mode;
+                button.SetResourceReference(Control.BackgroundProperty, selected ? "ActiveGlass" : "Panel");
+                button.SetResourceReference(Control.ForegroundProperty, selected ? "OnAccent" : "Ink");
+                button.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
+                button.IsEnabled = !c.Busy;
+            }
+        }
         tools.IsEnabled = !c.Busy; quick.IsEnabled = !c.Busy;
         send.Content = c.Busy ? Loc.T("Stop  ■", "إيقاف  ■") : Loc.T("Ask  ↗", "اسأل  ↗");
         hint.Text = c.Attachments.Count > 0 ? string.Join("  ·  ", c.Attachments.Select(Path.GetFileName)) : c.Capture != null ? (c.Store.Data.Settings.ConfirmImageSharing ? Loc.T("Capture ready · confirmation before sharing", "الصورة جاهزة · سيتم التأكيد قبل المشاركة") : Loc.T("Capture ready · send with your question", "الصورة جاهزة · أرسلها مع سؤالك")) : c.Store.Data.Settings.ComputerAccessEnabled && c.Mode == "General" ? Loc.T("Windows access on · commands are reviewed before execution", "الوصول لويندوز مفعّل · تُراجع الأوامر قبل تنفيذها") : ModeTip(c.Mode);
@@ -143,11 +156,13 @@ public sealed class ChatComposer : Border, IDisposable
     {
         if (c.Busy) { ((App)Application.Current).StopAll(); return; }
         if (string.IsNullOrWhiteSpace(input.Text)) return;
+        var chat = c.Current;
         string request = input.Text;
         if (c.Mode is "Screen" or "Crop" && c.Capture == null) { if (!await ((App)Application.Current).CaptureAsync(c.Mode == "Crop") || c.Capture == null) return; }
+        if (!ReferenceEquals(chat, c.Current)) return;
         input.Clear();
-        try { int count = c.Current.Messages.Count; var pending = c.SendAsync(request, allowPlanning: allowPlanning); if (c.Busy || c.Current.Messages.Count > count) Submitted?.Invoke(); await pending; if (c.Current.Messages.Count == count) SetDraft(request); }
-        catch (Exception ex) { SetDraft(request); Ui.Error(ex); }
+        try { int count = c.Current.Messages.Count; var pending = c.SendAsync(request, allowPlanning: allowPlanning); if (c.Busy || c.Current.Messages.Count > count) Submitted?.Invoke(); await pending; if (ReferenceEquals(chat, c.Current) && c.Current.Messages.Count == count && input.Text.Length == 0) SetDraft(request); }
+        catch (Exception ex) { if (ReferenceEquals(chat, c.Current) && input.Text.Length == 0) SetDraft(request); Ui.Error(ex); }
     }
     private async Task RecordVoice()
     {
@@ -158,7 +173,7 @@ public sealed class ChatComposer : Border, IDisposable
             c.Voice.StartRecording(); c.SetStatus(Loc.T("Listening · press the microphone again to send", "جاري الاستماع · اضغط الميكروفون مجددًا للإرسال"));
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) }; timer.Tick += (_, _) => { timer.Stop(); if (c.Voice.Recording) { c.Voice.CancelRecording(); c.SetStatus(Loc.T("Recording limit reached", "وصل التسجيل للحد الأقصى")); } }; timer.Start();
         }
-        else { using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(90)); try { SetDraft(await c.Voice.StopAndTranscribe(ct.Token)); } finally { c.SetStatus(Loc.T("Ready when you are", "جاهز عندما تكون مستعدًا")); } }
+        else { using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(90)); var chat = c.Current; try { string transcript = await c.Voice.StopAndTranscribe(ct.Token); if (ReferenceEquals(chat, c.Current)) SetDraft(transcript); } finally { c.SetStatus(Loc.T("Ready when you are", "جاهز عندما تكون مستعدًا")); } }
     }
     public static bool IsArabic(string text) => text.Any(ch => ch is >= '\u0600' and <= '\u06ff');
     public void Dispose() => c.Changed -= Refresh;

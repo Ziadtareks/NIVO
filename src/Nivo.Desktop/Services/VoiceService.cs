@@ -7,7 +7,12 @@ namespace Nivo.Services;
 
 public sealed class VoiceService(Store store) : IDisposable
 {
-    private WaveInEvent? recorder; private WaveFileWriter? writer; private string? recordingPath;
+    private readonly object writerGate = new();
+    private WaveInEvent? recorder;
+    private WaveFileWriter? writer;
+    private string? recordingPath;
+    private TaskCompletionSource<Exception?>? captureStopped;
+    private CancellationTokenSource? transcription;
     public bool Recording => recorder != null;
     public static Uri ValidateEndpoint(string value)
     {
@@ -19,20 +24,43 @@ public sealed class VoiceService(Store store) : IDisposable
     {
         if (!store.Data.Settings.VoiceEnabled || string.IsNullOrEmpty(store.Data.Settings.SttEndpoint)) throw new InvalidOperationException("Voice is off. Configure your speech API in Settings first.");
         if (Recording) return;
+        transcription?.Cancel();
         recordingPath = Path.Combine(store.Runtime, Guid.NewGuid().ToString("N") + ".wav");
         recorder = new WaveInEvent { WaveFormat = new WaveFormat(16000, 1), BufferMilliseconds = 100 };
-        writer = new WaveFileWriter(recordingPath, recorder.WaveFormat);
-        recorder.DataAvailable += (_, e) => { lock (this) { writer?.Write(e.Buffer, 0, e.BytesRecorded); } };
-        try { recorder.StartRecording(); } catch { CancelRecording(); throw; }
+        var device = recorder;
+        var stopped = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        captureStopped = stopped;
+        try
+        {
+            writer = new WaveFileWriter(recordingPath, device.WaveFormat);
+            device.DataAvailable += (_, e) =>
+            {
+                lock (writerGate)
+                {
+                    if (ReferenceEquals(recorder, device)) writer?.Write(e.Buffer, 0, e.BytesRecorded);
+                }
+            };
+            device.RecordingStopped += (_, e) => stopped.TrySetResult(e.Exception);
+            device.StartRecording();
+        }
+        catch { CancelRecording(); throw; }
     }
     public async Task<string> StopAndTranscribe(CancellationToken ct)
     {
-        var r = recorder ?? throw new InvalidOperationException("No recording is active.");
-        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        r.RecordingStopped += (_, _) => stopped.TrySetResult(); r.StopRecording(); await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
-        var path = recordingPath!; Dispose();
+        var device = recorder ?? throw new InvalidOperationException("No recording is active.");
+        if (transcription is { IsCancellationRequested: false }) throw new InvalidOperationException(Loc.T("Transcription is already starting.", "جاري بدء تفريغ التسجيل بالفعل."));
+        var stopped = captureStopped!.Task;
+        string path = recordingPath!;
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        transcription = request;
+        ct = request.Token;
         try
         {
+            if (!stopped.IsCompleted) device.StopRecording();
+            var failure = await stopped.WaitAsync(TimeSpan.FromSeconds(5), ct);
+            if (!ReferenceEquals(device, recorder)) throw new OperationCanceledException();
+            if (failure != null) throw new InvalidOperationException(Loc.T("The microphone stopped unexpectedly.", "توقف الميكروفون بشكل غير متوقع."), failure);
+            ReleaseRecording();
             var s = store.Data.Settings; using var http = Client(); using var form = new MultipartFormDataContent();
             var bytes = new ByteArrayContent(await File.ReadAllBytesAsync(path, ct)); bytes.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
             form.Add(bytes, "file", "speech.wav"); form.Add(new StringContent(s.SttModel), "model");
@@ -41,7 +69,12 @@ public sealed class VoiceService(Store store) : IDisposable
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
             return json.RootElement.GetProperty("text").GetString() ?? "";
         }
-        finally { if (File.Exists(path)) File.Delete(path); }
+        finally
+        {
+            if (ReferenceEquals(request, transcription)) transcription = null;
+            if (ReferenceEquals(device, recorder)) ReleaseRecording();
+            if (File.Exists(path)) File.Delete(path);
+        }
     }
     public async Task<string> Speak(string text, CancellationToken ct)
     {
@@ -65,6 +98,27 @@ public sealed class VoiceService(Store store) : IDisposable
     }
     private static HttpClient Client() => new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(90) };
     private static void SetAuth(HttpRequestMessage req, string key) { if (key.Length > 0) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key); }
-    public void Dispose() { lock (this) { recorder?.Dispose(); recorder = null; writer?.Dispose(); writer = null; } }
-    public void CancelRecording() { Dispose(); if (recordingPath != null && File.Exists(recordingPath)) File.Delete(recordingPath); recordingPath = null; }
+    private void ReleaseRecording()
+    {
+        var device = recorder;
+        var stopped = captureStopped;
+        lock (writerGate)
+        {
+            recorder = null;
+            writer?.Dispose();
+            writer = null;
+        }
+        recordingPath = null;
+        captureStopped = null;
+        stopped?.TrySetCanceled();
+        device?.Dispose();
+    }
+    public void CancelRecording()
+    {
+        transcription?.Cancel();
+        string? path = recordingPath;
+        try { ReleaseRecording(); }
+        finally { if (path != null && File.Exists(path)) File.Delete(path); }
+    }
+    public void Dispose() => CancelRecording();
 }

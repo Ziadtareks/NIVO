@@ -81,14 +81,28 @@ public sealed partial class MainWindow : Window
         var main = new DockPanel { Margin = new Thickness(28, 20, 26, 20) }; Grid.SetColumn(main, 1);
         var top = new Grid { Margin = new Thickness(0, 0, 0, 16) }; top.ColumnDefinitions.Add(new ColumnDefinition()); top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         modelPill = Ui.Btn("", () => Navigate("Settings", "OpenCode AI")); modelPill.SetResourceReference(StyleProperty, "PillButton"); modelPill.Padding = new Thickness(10, 4, 10, 4); modelPill.FontSize = 11; modelPill.Margin = new Thickness(10, 0, 8, 0);
-        var statusRow = Ui.Row(status, modelPill); statusRow.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(statusRow);
+        var statusRow = new DockPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
+        DockPanel.SetDock(modelPill, Dock.Right); statusRow.Children.Add(modelPill);
+        status.TextTrimming = TextTrimming.CharacterEllipsis; statusRow.Children.Add(status); top.Children.Add(statusRow);
 
         langBtn = Ui.Btn(Loc.IsArabic ? "EN" : "عربي", () => ((App)Application.Current).ApplyLanguage(Loc.IsArabic ? "English" : "Arabic"));
         langBtn.Tag = "LanguageToggle"; langBtn.ToolTip = Loc.T("Switch interface language to Arabic", "تبديل واجهة البرنامج إلى الإنجليزية");
         incognitoBtn = Ui.Btn(Loc.T("Incognito", "خفي"), () => controller.ToggleIncognito());
         var dockBtn = Ui.Btn(Loc.T("Dock", "الشريط"), () => { controller.Store.Data.Settings.DesktopEnabled = !controller.Store.Data.Settings.DesktopEnabled; controller.Store.Save(); ((App)Application.Current).RefreshShell(); });
         var controls = Ui.Row(langBtn, incognitoBtn, Ui.Btn(Loc.T("New chat", "محادثة جديدة"), () => { controller.NewChat(); Navigate("Assistant"); }), dockBtn, Ui.Btn(Loc.T("Island", "الجزيرة"), () => ((App)Application.Current).ToggleIsland()));
-        Grid.SetColumn(controls, 1); top.Children.Add(controls); DockPanel.SetDock(top, Dock.Top); main.Children.Add(top);
+        top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetColumn(controls, 1); top.Children.Add(controls);
+        top.SizeChanged += (_, _) =>
+        {
+            controls.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            bool stacked = top.ActualWidth < controls.DesiredSize.Width + 260;
+            Grid.SetColumnSpan(statusRow, stacked ? 2 : 1);
+            Grid.SetColumn(controls, stacked ? 0 : 1);
+            Grid.SetColumnSpan(controls, stacked ? 2 : 1);
+            Grid.SetRow(controls, stacked ? 1 : 0);
+        };
+        DockPanel.SetDock(top, Dock.Top); main.Children.Add(top);
         main.Children.Add(page); var mainFrame = new Border { Child = main }; mainFrame.SetResourceReference(Border.BackgroundProperty, "Panel"); Grid.SetColumn(mainFrame, 1); root.Children.Add(mainFrame);
 
         var layout = new DockPanel();
