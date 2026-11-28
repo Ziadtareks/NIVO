@@ -609,7 +609,7 @@ public sealed partial class MainWindow
         voiceAccountProvider.SelectionChanged += (_, _) => MarkDirty();
         var accountVoice = OptionToggle(
             Loc.T("Talk with my connected account (experimental)", "Talk بصوت حسابي المتصل (تجريبي)"),
-            Loc.T("Uses a connected account: Codex realtime inside NIVO, or Antigravity in its original CLI window (press F6 there). Account voice availability applies. No separate API fallback.", "يستخدم الحساب المتصل: صوت Codex داخل NIVO، أو نافذة Antigravity الأصلية (اضغط F6 بداخلها). يتطلب إتاحة الصوت للحساب. لا يتحوّل إلى API منفصل تلقائيًا."),
+            Loc.T("Uses the connected account’s native voice inside NIVO. Press Talk to connect, then press it again to stop. Account voice availability applies. No separate API fallback.", "يستخدم صوت الحساب المتصل الأصلي داخل نيڤو. اضغط Talk للاتصال، ثم اضغطه مجددًا للإيقاف. يتطلب إتاحة الصوت للحساب. لا يتحوّل إلى API منفصل تلقائيًا."),
             s.UseAccountVoice, "UseAccountVoice");
         var enabled = OptionToggle(
             Loc.T("Enable voice using my configured APIs", "تفعيل الصوت باستخدام روابط API الخاصة بي"),
@@ -629,7 +629,7 @@ public sealed partial class MainWindow
         tabs["Voice"] = Ui.Stack(
             Section(
                 Loc.T("Native account Talk", "Talk بصوت الحساب الأصلي"),
-                Loc.T("Codex opens the microphone after connection. For Antigravity, press F6 in the external CLI window to start voice; its transcripts stay in that window. Account quotas apply. Stop with Talk again or Escape. Computer actions use the normal reviewed text task flow.", "Codex يفتح الميكروفون بعد الاتصال. في Antigravity اضغط F6 داخل نافذة CLI الخارجية لبدء الصوت؛ المحادثة تظل داخل النافذة. تُطبّق حصة الحساب. للإيقاف اضغط Talk مجددًا أو Escape. أوامر الجهاز تُنفّذ من مسار المهام النصية المعتاد بمراجعة الخطة."),
+                Loc.T("Voice starts from this app after the provider confirms the session. Antigravity runs privately in the background; its transcript is not mirrored into NIVO chat and it is unavailable in Incognito. Account quotas apply. Stop with Talk again or Escape. Computer actions use the normal reviewed text task flow.", "يبدأ الصوت من داخل البرنامج بعد تأكيد المزوّد للجلسة. يعمل Antigravity في الخلفية؛ نص محادثته لا يُنسخ إلى شات نيڤو وهو غير متاح في الوضع الخفي. تُطبّق حصة الحساب. للإيقاف اضغط Talk مجددًا أو Escape. أوامر الجهاز تُنفّذ من مسار المهام النصية المعتاد بمراجعة الخطة."),
                 accountVoice,
                 Field(Loc.T("Voice account", "حساب الصوت"), voiceAccountProvider,
                     Loc.T("Auto checks the last account you connected, then the other connected account. This is separate from the saved text-model preference.", "التلقائي يفحص آخر حساب ربطته ثم الحساب الآخر المتاح. الاختيار منفصل عن تفضيل موديل المحادثة المحفوظ.")),

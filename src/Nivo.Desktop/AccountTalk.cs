@@ -48,9 +48,7 @@ public partial class App
                 updateStatus, request.Token);
             accountTalkSession = session;
             if (request.IsCancellationRequested) { await session.StopAsync(); }
-            else Controller.SetStatus(session.UsesExternalWindow
-                ? Loc.T("Antigravity window ready · press F6 there to start voice · Talk stops it", "نافذة Antigravity جاهزة · اضغط F6 بداخلها لبدء الصوت · Talk للإيقاف")
-                : Loc.T("Listening · tap Talk again to end", "جاري الاستماع · اضغط Talk مجددًا للإنهاء"));
+            else Controller.SetStatus(Loc.T("Talk connected · tap Talk again to end", "المحادثة الصوتية متصلة · اضغط Talk مجددًا للإنهاء"));
             _ = ObserveAccountTalkAsync(session, request, finished);
         }
         catch

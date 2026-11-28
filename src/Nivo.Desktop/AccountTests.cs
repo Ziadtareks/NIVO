@@ -57,6 +57,19 @@ internal static class AccountTests
             if (!condition) throw new InvalidOperationException("FAIL " + description);
             results.Add("PASS " + description); File.WriteAllLines(Path.Combine(root, "results.txt"), results);
         }
+        var bootHandshake = new NativeVoiceHandshake();
+        bootHandshake.Observe("? for shortcuts\n");
+        Check(!bootHandshake.Ready.IsCompleted, "An initial empty Antigravity prompt is not model readiness");
+        bootHandshake.Observe("? for shortcuts                         Gemini 4 ");
+        Check(!bootHandshake.Ready.IsCompleted, "A partial model status line does not complete readiness");
+        bootHandshake.Observe("Neon · high\r\n");
+        Check(bootHandshake.Ready.IsCompletedSuccessfully, "The complete model status line signals native session readiness across terminal chunks");
+        var bridgeHandshake = new NativeVoiceHandshake(); bridgeHandshake.BeginVoiceRequest();
+        bridgeHandshake.Observe("Couldn't open the micro");
+        Check(!bridgeHandshake.Ended.IsCompleted, "A partial audio-connection diagnostic does not terminate startup");
+        bridgeHandshake.Observe("phone: cannot reach the mic server");
+        Check(bridgeHandshake.Ended.IsCompletedSuccessfully && await bridgeHandshake.Ended != null
+            && !bridgeHandshake.Started.IsCompleted, "A native microphone-bridge refusal fails promptly without a false connected state");
         string fixture = Path.GetFullPath("tests/Nivo.FixtureCli/bin/Release/net10.0/Nivo.FixtureCli.exe");
         Check(File.Exists(fixture), "Account protocol fixture is built");
         string startupFixture = Path.Combine(root, "startup fixture");
@@ -229,12 +242,24 @@ internal static class AccountTests
         Directory.CreateDirectory(nativeAcp);
         string preserved = Path.Combine(nativeAcp, "fixture-preserved");
         File.WriteAllText(preserved, "Synthetic profile marker; not a credential");
+        store.Incognito = true; rejected = false;
+        try { await AntigravityNativeTalkSession.StartForTestAsync(store, "fixture-text", "No tools", null, false, timeout.Token); }
+        catch (InvalidOperationException) { rejected = true; }
+        finally { store.Incognito = false; }
+        Check(rejected, "Antigravity native history is blocked in Incognito before any runtime or audio session starts");
         var externalTalk = await AntigravityNativeTalkSession.StartForTestAsync(store, "fixture-text", "No tools", null, true, timeout.Token);
-        Check(externalTalk.IsActive && externalTalk.UsesExternalWindow, "Antigravity native Talk starts both fixture processes without audio devices or visible windows");
+        Check(externalTalk.IsActive && !externalTalk.UsesExternalWindow, "Antigravity Talk starts privately inside NIVO without audio devices or visible windows");
         string nativeSessions = Path.Combine(store.Root, "accounts", "antigravity", "voice-sessions");
         string sessionDir = Directory.GetDirectories(nativeSessions).Single();
         string workspace = Path.Combine(sessionDir, "workspace");
         Check(File.Exists(Path.Combine(workspace, "verified")), "Native CLI reuses the isolated account through a junction with loopback audio forwarding");
+        using (var nativeConsole = JsonDocument.Parse(File.ReadAllText(Path.Combine(workspace, "console-state.json"))))
+        {
+            var state = nativeConsole.RootElement;
+            Check(!state.GetProperty("visible").GetBoolean() && !state.GetProperty("redirectedInput").GetBoolean() && !state.GetProperty("redirectedOutput").GetBoolean(),
+                "Native Talk owns a real hidden Windows pseudoconsole, not a visible window or redirected noninteractive session");
+        }
+        Check(File.ReadAllText(Path.Combine(workspace, "voice-started")) == "/voice live", "Talk starts the original voice command automatically without requiring a manual keypress");
         var processIds = new[] { "bridge.pid", "cli.pid" }.Select(name => int.Parse(File.ReadAllText(Path.Combine(workspace, name)))).ToArray();
         await externalTalk.StopAsync();
         await externalTalk.Completion.WaitAsync(TimeSpan.FromSeconds(5));
@@ -263,6 +288,30 @@ internal static class AccountTests
         await closedTalk.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         await closedTalk.DisposeAsync();
         Check(!closedTalk.IsActive && !Directory.Exists(sessionDir) && File.Exists(preserved), "Closing the external CLI ends Talk normally and stops its audio bridge");
+        var endedTalk = await AntigravityNativeTalkSession.StartForTestAsync(store, "fixture-text", "No tools", null, false, timeout.Token);
+        sessionDir = Directory.GetDirectories(nativeSessions).Single();
+        File.WriteAllText(Path.Combine(sessionDir, "workspace", "stop-voice"), "fixture");
+        await endedTalk.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+        await endedTalk.DisposeAsync();
+        Check(!endedTalk.IsActive && !Directory.Exists(sessionDir), "Provider voice-end events stop the hidden runtime and audio bridge even while its terminal process is alive");
+        string? previousVoiceFailure = Environment.GetEnvironmentVariable("NIVO_FIXTURE_VOICE_FAIL");
+        try
+        {
+            Environment.SetEnvironmentVariable("NIVO_FIXTURE_VOICE_FAIL", "1"); rejected = false;
+            try { await AntigravityNativeTalkSession.StartForTestAsync(store, "fixture-text", "No tools", null, false, timeout.Token); }
+            catch (InvalidOperationException ex) { rejected = ex.Message.Contains("voice", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("صوت"); }
+            Check(rejected && !Directory.GetDirectories(nativeSessions).Any() && File.Exists(preserved), "Unavailable account voice fails cleanly instead of returning a fake listening state or opening an external window");
+        }
+        finally { Environment.SetEnvironmentVariable("NIVO_FIXTURE_VOICE_FAIL", previousVoiceFailure); }
+        var unavailableHandshake = new NativeVoiceHandshake(); unavailableHandshake.BeginVoiceRequest();
+        unavailableHandshake.Observe("Live mode isn't available in this session.");
+        var unavailableMessage = (await unavailableHandshake.Ended)?.Message ?? "";
+        Check(!unavailableHandshake.Started.IsCompleted && unavailableMessage.Contains("Antigravity")
+            && (unavailableMessage.Contains("does not establish") || unavailableMessage.Contains("مش دليل")),
+            "Provider Live unavailability is distinguished from microphone permission failure");
+        var replies = new List<string>(); var decoder = new HiddenConsoleProcess.ConsoleTextDecoder(replies.Add);
+        string plain = decoder.Feed("\u001b[3") + decoder.Feed("1mHello\u001b[0m\u001b[6") + decoder.Feed("n\u001b]11;?\u0007");
+        Check(plain == "Hello" && replies.SequenceEqual(new[] { "\u001b[1;1R", "\u001b]11;rgb:0000/0000/0000\u001b\\" }), "Terminal controls are decoded across chunks and answered only with constant terminal capability replies");
         string? previousVersionError = Environment.GetEnvironmentVariable("NIVO_FIXTURE_VERSION_ERROR");
         try
         {
@@ -367,6 +416,28 @@ internal static class AccountTests
         talkButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
         Check(talkButton.IsEnabled, "Switching to native Talk keeps the existing button available to cancel connection");
         buttonWork.TrySetResult(); await Task.Delay(20);
+        Loc.Apply(store.Data.Settings.Language); Motion.Reduced = true;
+        var appForControls = (App)Application.Current;
+        var requestField = typeof(App).GetField("accountTalkRequest", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var previousRequest = requestField.GetValue(appForControls);
+        using (var syntheticCall = new CancellationTokenSource())
+        {
+            var controlController = new Controller(store);
+            requestField.SetValue(appForControls, syntheticCall);
+            var stopComposer = new ChatComposer(controlController);
+            var stopIsland = new IslandWindow(controlController, () => (null, null)) { Left = -16000, Top = -16000, ShowActivated = false };
+            try
+            {
+                stopIsland.Show(); stopIsland.UpdateLayout();
+                Descendants<Button>(stopIsland).First(b => Equals(b.Content, "⌄")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                stopIsland.UpdateLayout();
+                Check(Descendants<Button>(stopComposer).Any(b => Equals(b.ToolTip, Loc.T("Stop Talk", "إيقاف الصوت"))), "Composer immediately exposes Stop Talk while a native connection is active or connecting");
+                Check(Descendants<TextBlock>(stopIsland).Any(t => t.Text == Loc.T("Stop Talk", "إيقاف الصوت")), "Island exposes Stop Talk without requiring a separate terminal window");
+                requestField.SetValue(appForControls, null); controlController.Notify();
+                Check(!Descendants<TextBlock>(stopIsland).Any(t => t.Text == Loc.T("Stop Talk", "إيقاف الصوت")), "Voice controls return to idle after the session ends");
+            }
+            finally { requestField.SetValue(appForControls, previousRequest); stopIsland.Close(); stopComposer.Dispose(); }
+        }
         Ui.ApplyTheme("Frost"); Motion.Reduced = true;
         foreach (string language in new[] { "Arabic", "English" })
         {

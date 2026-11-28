@@ -69,6 +69,8 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
     private readonly Grid compactBanner = new() { Visibility = Visibility.Collapsed };
     private readonly Button openButton;
     private readonly Button statusActionBtn;
+    private readonly Button talkTile;
+    private bool talkShowsStop;
     private readonly TextBlock statusBannerText = new() { FontSize = 12, Foreground = ShellTheme.Ink("#D6E8FF"), VerticalAlignment = VerticalAlignment.Center };
     private readonly System.Windows.Shapes.Ellipse bannerDot = new() { Width = 8, Height = 8, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
     private readonly ActivityGlyph activity = new();
@@ -123,7 +125,7 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         Grid.SetColumn(openButton, 3); header.Children.Add(openButton);
 
         // === View 1: Command Center (4x2 Tile Grid + Recent Outputs, matching frame_37 & frame_54) ===
-        statusActionBtn = DarkPillBtn("", () => { if (c.Busy) ((App)Application.Current).StopAll(); else c.ToggleIncognito(); });
+        statusActionBtn = DarkPillBtn("", () => { if (c.Busy || ((App)Application.Current).AccountTalkActive) ((App)Application.Current).StopAll(); else c.ToggleIncognito(); });
         statusActionBtn.Margin = new Thickness(0);
         var statusBarGrid = new Grid();
         statusBarGrid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -133,7 +135,8 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
         var statusBanner = new Border { Background = ShellTheme.Surface("#1F3566"), BorderBrush = ShellTheme.Line("#3C629E"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 7, 8, 7), Margin = new Thickness(0, 6, 0, 10), Child = statusBarGrid };
 
         var gridTiles = new UniformGridEx(4) { Margin = new Thickness(0, 0, 0, 10) };
-        gridTiles.Children.Add(Tile("\uE720", "Talk", "تحدّث", async () => await TriggerVoiceOrSettings(), canInterrupt: () => c.Store.Data.Settings.UseAccountVoice));
+        talkTile = Tile("\uE720", "Talk", "تحدّث", async () => await TriggerVoiceOrSettings(), canInterrupt: () => c.Store.Data.Settings.UseAccountVoice);
+        gridTiles.Children.Add(talkTile);
         gridTiles.Children.Add(Tile("\uE8F2", "Silent Ask", "السؤال الصامت", () => { pinned = true; SwitchView("ask"); }));
         gridTiles.Children.Add(Tile("\uE7F4", "Ask screen", "اسأل عن شاشتي", async () => { if (await ((App)Application.Current).CaptureAsync(false, false, false) && c.Capture != null) { pinned = true; Expand(true); SwitchView("ask"); } }));
         gridTiles.Children.Add(Tile("\uE7A8", "Crop & ask", "اسأل عن جزء من الشاشة", async () => { if (await ((App)Application.Current).CaptureAsync(true, false, false) && c.Capture != null) { pinned = true; Expand(true); SwitchView("ask"); } }));
@@ -1072,13 +1075,18 @@ public sealed class IslandWindow : Window, Motion.IRenderParticipant
 
         bool speaking = c.Status.StartsWith("Speaking", StringComparison.Ordinal);
         bool accountTalk = ((App)Application.Current).AccountTalkActive;
+        if (talkShowsStop != accountTalk)
+        {
+            talkShowsStop = accountTalk;
+            StyleTile(talkTile, accountTalk ? "\uE71A" : "\uE720", accountTalk ? "Stop Talk" : "Talk", accountTalk ? "إيقاف الصوت" : "تحدّث", null);
+        }
         string nextStatus = c.Store.Incognito ? (IsAr ? "وضع خفي · بدون حفظ" : "Incognito · screen paused") : accountTalk ? c.Status : c.Voice.Recording ? (IsAr ? "نستمع…" : "Listening…") : speaking ? (IsAr ? "نتحدث…" : "Speaking…") : c.Busy ? (IsAr ? "نعمل معك…" : "Working with you…") : c.IsQuiet ? (IsAr ? "وضع هادئ" : "Quiet mode") : (IsAr ? "جاهزة على جهازك" : "Ready when you are");
         if (!string.Equals(status.Text, nextStatus, StringComparison.Ordinal)) status.Text = nextStatus;
 
-        string nextBannerText = c.Busy ? c.Status : c.Store.Incognito ? (IsAr ? "الوضع الخفي مفعّل · لا يتم حفظ المحادثات" : "Incognito active · history paused") : (IsAr ? "نيڤو جاهزة على هذا الجهاز · اسحب أي ملف لهنا" : "NIVO ready on this PC · drop any file here");
+        string nextBannerText = c.Busy || accountTalk ? c.Status : c.Store.Incognito ? (IsAr ? "الوضع الخفي مفعّل · لا يتم حفظ المحادثات" : "Incognito active · history paused") : (IsAr ? "نيڤو جاهزة على هذا الجهاز · اسحب أي ملف لهنا" : "NIVO ready on this PC · drop any file here");
         if (!string.Equals(statusBannerText.Text, nextBannerText, StringComparison.Ordinal)) statusBannerText.Text = nextBannerText;
 
-        string nextActionContent = c.Busy ? (IsAr ? "إيقاف" : "Stop") : c.Store.Incognito ? (IsAr ? "إيقاف الخفي" : "Incognito ON") : (IsAr ? "وضع خفي" : "Incognito");
+        string nextActionContent = c.Busy || accountTalk ? (IsAr ? "إيقاف" : "Stop") : c.Store.Incognito ? (IsAr ? "إيقاف الخفي" : "Incognito ON") : (IsAr ? "وضع خفي" : "Incognito");
         if (!Equals(statusActionBtn.Content, nextActionContent)) statusActionBtn.Content = nextActionContent;
 
         string nextSendContent = c.Busy ? "■" : "↑";

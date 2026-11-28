@@ -13,8 +13,8 @@ public sealed partial class MainWindow
             "Sign in in your browser. NIVO keeps a separate provider session; existing T3 Code logins are not copied. Account changes apply immediately; save preferences after choosing a model.",
             "سجّل الدخول من المتصفح. نيڤو يحتفظ بجلسة مستقلة ولا ينسخ حسابات T3 Code. ربط وفصل الحساب فوري؛ احفظ الإعدادات بعد اختيار الموديل."), 12));
         panel.Children.Add(Ui.Text(Loc.T(
-            "Account models handle conversation and reported image input. Talk automatically uses a connected account: Codex realtime in NIVO or native Antigravity in an external CLI window (F6). Catalog entries do not guarantee quota or subscription access.",
-            "موديلات الحساب للمحادثة وفهم الصور حسب القدرات المعلنة. Talk يختار الحساب المتصل: Codex داخل NIVO أو Antigravity في نافذة CLI خارجية (F6). ظهور موديل في القائمة لا يضمن توفر حصته أو صلاحية الاشتراك له."), 12));
+            "Account models handle conversation and reported image input. Talk uses native voice from a connected account inside NIVO, with automatic start and stop. Catalog entries do not guarantee quota or subscription access. Text/image access does not establish native Live voice availability.",
+            "موديلات الحساب للمحادثة وفهم الصور حسب القدرات المعلنة. Talk يستخدم صوت الحساب المتصل الأصلي داخل نيڤو، مع بدء وإيقاف من البرنامج. ظهور موديل في القائمة لا يضمن توفر حصته أو صلاحية الاشتراك له. دعم النص والصور لا يثبت إتاحة صوت Live الأصلي."), 12));
         foreach (string provider in new[] { "codex", "antigravity" })
         {
             string title = provider == "codex" ? "Codex · ChatGPT" : "Antigravity · Google";

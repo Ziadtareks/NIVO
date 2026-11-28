@@ -1,8 +1,24 @@
-# Verification — 2026-11-26
+# Verification — 2026-11-28
 
-Status: version 1.9.0 standalone Windows EXE and opt-in startup; hardware and live-provider acceptance testing remains in progress.
+Status: version 1.10.0 native Talk hosted inside NIVO; hardware and live-provider acceptance testing remains in progress.
 
 ## Build and local checks
+
+### Version 1.10.0 — Talk inside NIVO
+
+The release review reproduced premature readiness: the native CLI paints an empty `? for shortcuts` prompt before its model/backend finishes initializing. The new handshake requires a complete model-status footer, including when terminal output splits the footer across reads. A failing regression test was observed before the fix. A real isolated CLI 1.5.18 probe then reached the native audio connection stage instead of the earlier Live-unavailable response. It used `ANTIGRAVITY_MIC=127.0.0.1:1` without any microphone server, so the expected result was an explicit cannot-reach-mic-server refusal; no audio hardware or model prompt was used. This is evidence of startup progress, not a successful live audio round trip or proof of voice entitlement.
+
+Audio-bridge refusal now fails promptly with a specific diagnostic; model catalogs explicitly leave voice availability unverified. Reminders and proactive suggestions defer while account Talk connects or runs. Native voice remains experimental and depends on provider terminal markers and runtime compatibility.
+
+User acceptance reported `Live mode isn't available in this session` from the real Antigravity runtime. Hidden terminal hosting works, but native Live voice is not operational in that reported session. Provider documentation lists session restrictions and account availability separately from microphone errors. NIVO now preserves this distinction in its error, without substituting an API or another account. This report motivated the readiness fix above; full physical audio acceptance is still unverified. The earlier prompt-only probe was not a voice availability test.
+
+Release validation passes 213 focused checks with normal exit code 0: 84 account checks (`artifacts/accounts-20261128-030252/results.txt`), 51 assistant checks (`artifacts/assistant-20261128-030327/results.txt`), 25 computer checks (`artifacts/computer-20261128-030332/results.txt`), and 53 motion checks (`artifacts/motion-20261128-030344/results.txt`). Builds report zero warnings/errors. The NuGet vulnerability query against nuget.org reports no vulnerable resolved packages. The 13 bundled dependency/runtime versions match the previous audited distribution, so its full license/notice texts remain applicable. No visual assets were replaced in this round. These deterministic checks do not prove live account voice entitlement or physical audio quality.
+
+Antigravity voice now runs in a private Windows pseudoconsole with no terminal window. NIVO waits for the authenticated prompt, dismisses only informational startup overlays, sends the documented `/voice live` command automatically, and reports a connected session only after the provider's `Started voice chat` marker. Talk again or Escape cancels/ends it. The Island and composer expose Stop Talk while connecting or active. Provider voice-end events close the hidden runtime and audio bridge.
+
+Real installed Antigravity 1.5.18 was probed in a private terminal without a voice command, microphone server or model prompt: unauthenticated and authenticated prompt rendering work; the linked account reaches the actual `? for shortcuts` prompt. No raw token was read/copied and no physical audio or voice inference was sent. The voice transport is experimental and depends on terminal UI markers, account entitlement and audio permissions. Antigravity transcripts/context are not mirrored into NIVO chat. Its native history makes that route unavailable in Incognito; Codex retains its ephemeral inline route.
+
+Process-boundary fixtures verify terminal identity with Console input/output not redirected and its console HWND invisible, exact automatic voice activation, account refusal, provider-ended sessions, cancellation, process-tree cleanup, rapid restarts, decoded split terminal controls, and Stop Talk controls in NIVO. These tests use no hardware or live model. No API voice fallback is introduced.
 
 ### Version 1.9.0 — standalone download and Windows startup
 

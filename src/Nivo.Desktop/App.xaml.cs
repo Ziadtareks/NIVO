@@ -453,10 +453,10 @@ public partial class App : Application
             if (!Controller.Store.Data.Settings.ExcludedApps.Any(x => !string.IsNullOrWhiteSpace(x) && (active.Title + " " + active.Process).Contains(x, StringComparison.OrdinalIgnoreCase))) { Controller.LastExternalTitle = active.Title; Controller.LastExternalProcess = active.Process; }
             else { Controller.LastExternalTitle = ""; Controller.LastExternalProcess = ""; }
         }
-        bool quietOrSuppressed = Controller.IsQuiet || decision.Suppressed;
+        bool quietOrSuppressed = Controller.IsQuiet || decision.Suppressed || AccountTalkActive;
         var localNudge = checkIns.Check(Controller.Store, Controller.LastExternalTitle, quietOrSuppressed || Controller.Busy || active.Pid == Environment.ProcessId, DateTime.Now);
         if (localNudge != null) ShowSuggestion(localNudge);
-        if (!decision.Suppressed)
+        if (!decision.Suppressed && !AccountTalkActive)
         {
             foreach (var item in Controller.Store.Data.Workspace.Where(t => !t.Done && !t.Notified && t.Due.HasValue && t.Due <= DateTime.Now).ToArray())
             { item.Notified = true; Controller.Store.Save(); ShowSuggestion(Loc.T("Reminder: ", "تذكير: ") + item.Title); }
@@ -464,7 +464,7 @@ public partial class App : Application
         bool titleDue = (DateTime.Now - lastScan).TotalSeconds >= Controller.Store.Data.Settings.ScanSeconds;
         if (titleDue) lastScan = DateTime.Now;
         bool checkTitle = titleDue && Controller.Store.Data.Settings.Proactive && Controller.LastExternalTitle != lastSuggestedTitle;
-        if (!Controller.Busy && !decision.Suppressed && active.Pid != Environment.ProcessId && (checkTitle || Controller.Store.Data.Settings.ErrorAwareness))
+        if (!Controller.Busy && !AccountTalkActive && !decision.Suppressed && active.Pid != Environment.ProcessId && (checkTitle || Controller.Store.Data.Settings.ErrorAwareness))
         {
             if (checkTitle && !Controller.IsQuiet) lastSuggestedTitle = Controller.LastExternalTitle;
             await Controller.CheckSuggestionAsync(checkTitle);
@@ -474,7 +474,7 @@ public partial class App : Application
     {
         if (capturing || Exiting || Controller == null) return;
         var decision = SyncShellVisibility(forceDockRefresh: false, updateDockContext: false);
-        if (decision.Suppressed) return;
+        if (decision.Suppressed || AccountTalkActive) return;
         tray?.ShowBalloonTip(7000, Loc.T("NIVO", "نيڤو"), text, Forms.ToolTipIcon.Info);
         Action accept = () => { Controller.Mode = "Agent"; Controller.Draft = text; Controller.Notify(); ShowAsk(); ask?.Refresh(Controller); };
         if (decision.ShowIsland && island is { IsVisible: true, IsExpanded: false } && !Controller.Busy) island.ShowSuggestion(text, accept);

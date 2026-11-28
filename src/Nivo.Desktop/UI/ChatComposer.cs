@@ -19,6 +19,8 @@ public sealed class ChatComposer : Border, IDisposable
     private readonly WrapPanel quick = new() { Margin = new Thickness(0, 6, 0, 4) };
     private readonly Dictionary<string, Button> modes = [];
     private readonly Button send;
+    private readonly Button voice;
+    private bool voiceShowsStop;
     private readonly StackPanel tools;
     public event Action? Submitted;
 
@@ -69,7 +71,7 @@ public sealed class ChatComposer : Border, IDisposable
         tools.Children.Add(Icon("\uE723", Loc.T("Attach files · or drop them here", "إرفاق ملفات · أو اسحبها هنا"), () => { var files = Ui.PickFiles(); if (files.Length > 0) AddFiles(files); }));
         var capture = Ui.AsyncBtn("", async () => await ((App)Application.Current).CaptureAsync(c.Mode == "Crop")); capture.Content = Ui.Glyph("\uE7F4", 17); capture.ToolTip = Loc.T("Capture screen / crop", "التقاط الشاشة / قصّ"); Ui.Flat(capture); capture.Padding = new Thickness(10, 8, 10, 8); tools.Children.Add(capture);
         var hoverCap = Ui.AsyncBtn("", async () => await ((App)Application.Current).CaptureAsync(false, true)); hoverCap.Content = Ui.Glyph("\uE81D", 17); hoverCap.ToolTip = Loc.T("Hover to ask · capture area around cursor", "أشّر واسأل · التقاط المنطقة حول المؤشر"); Ui.Flat(hoverCap); hoverCap.Padding = new Thickness(10, 8, 10, 8); tools.Children.Add(hoverCap);
-        var voice = Ui.InterruptibleAsyncBtn("", RecordVoice, () => c.Store.Data.Settings.UseAccountVoice); voice.Content = Ui.Glyph("\uE720", 17); voice.ToolTip = Loc.T("Talk · configured account voice or speech API", "Talk · صوت الحساب أو API الصوت المختار"); Ui.Flat(voice); voice.Padding = new Thickness(10, 8, 10, 8); tools.Children.Add(voice);
+        voice = Ui.InterruptibleAsyncBtn("", RecordVoice, () => c.Store.Data.Settings.UseAccountVoice); voice.Content = Ui.Glyph("\uE720", 17); voice.ToolTip = Loc.T("Talk · configured account voice or speech API", "Talk · صوت الحساب أو API الصوت المختار"); Ui.Flat(voice); voice.Padding = new Thickness(10, 8, 10, 8); tools.Children.Add(voice);
         tools.Children.Add(Icon("\uE894", Loc.T("Clear attachments", "مسح المرفقات"), () => { c.Capture = null; c.Attachments.Clear(); c.Notify(); })); footer.Children.Add(tools);
         send = Ui.Btn(Loc.T("Ask  ↗", "اسأل  ↗"), () => { }, true); send.Tag = "Submit"; send.Click += async (_, _) => { try { await Send(); } catch (Exception ex) { Ui.Error(ex); } }; send.Margin = new Thickness(0); send.MinWidth = 94; Grid.SetColumn(send, 1); footer.Children.Add(send); content.Children.Add(footer);
         hint.Margin = new Thickness(4, 5, 4, 0); content.Children.Add(hint); Child = content;
@@ -117,6 +119,15 @@ public sealed class ChatComposer : Border, IDisposable
     };
     private void Refresh()
     {
+        bool accountVoice = Application.Current is App app && app.AccountTalkActive;
+        if (voiceShowsStop != accountVoice)
+        {
+            voiceShowsStop = accountVoice;
+            voice.Content = Ui.Glyph(accountVoice ? "\uE71A" : "\uE720", 17);
+            voice.ToolTip = accountVoice ? Loc.T("Stop Talk", "إيقاف الصوت") : Loc.T("Talk · configured account voice or speech API", "Talk · صوت الحساب أو API الصوت المختار");
+            System.Windows.Automation.AutomationProperties.SetName(voice, accountVoice ? Loc.T("Stop Talk", "إيقاف الصوت") : "Talk");
+        }
+
         foreach (var pair in modes) { pair.Value.SetResourceReference(Control.BackgroundProperty, pair.Key == c.Mode ? "ActiveGlass" : "Panel"); pair.Value.SetResourceReference(Control.ForegroundProperty, pair.Key == c.Mode ? "OnAccent" : "Ink"); pair.Value.FontWeight = pair.Key == c.Mode ? FontWeights.SemiBold : FontWeights.Normal; pair.Value.IsEnabled = !c.Busy; }
         tools.IsEnabled = !c.Busy; quick.IsEnabled = !c.Busy;
         send.Content = c.Busy ? Loc.T("Stop  ■", "إيقاف  ■") : Loc.T("Ask  ↗", "اسأل  ↗");

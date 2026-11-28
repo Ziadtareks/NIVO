@@ -10,7 +10,7 @@ using Nivo.Core;
 namespace Nivo.Services;
 
 /// <summary>
-/// Launches the official interactive Antigravity CLI (v1.5+) in an external native Windows console window
+/// Hosts the official interactive Antigravity voice runtime (v1.5+) in a private Windows pseudoconsole
 /// backed by NIVO's existing isolated file-stored profile (without copying or reading raw auth tokens)
 /// and a loopback-only <c>agy mic-serve</c> bridge for <c>/voice live</c> / <c>F6</c> audio input and playback.
 /// </summary>
@@ -26,7 +26,6 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
     private static readonly TimeSpan VersionCheckTimeout = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan MicServeStartupCheckDelay = TimeSpan.FromMilliseconds(350);
-    private static readonly TimeSpan CliStartupStabilityDelay = TimeSpan.FromMilliseconds(350);
     private static readonly TimeSpan ProcessStopTimeout = TimeSpan.FromSeconds(2);
 
     private static readonly string[] RemovedEnvPrefixes =
@@ -69,6 +68,8 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
     ];
 
     private readonly Process cliProcess;
+    private readonly HiddenConsoleProcess cliConsole;
+    private readonly NativeVoiceHandshake voiceHandshake;
     private readonly Process micServeProcess;
     private readonly VoiceSessionScope scope;
     private readonly CancellationTokenSource monitorCts = new();
@@ -86,7 +87,8 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
     private int localStopRequested;
 
     private AntigravityNativeTalkSession(
-        Process cliProcess,
+        HiddenConsoleProcess cliConsole,
+        NativeVoiceHandshake voiceHandshake,
         Process micServeProcess,
         VoiceSessionScope scope,
         string bareModel,
@@ -97,7 +99,9 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
         StringBuilder micServeDiagnostics,
         object micDiagLock)
     {
-        this.cliProcess = cliProcess;
+        this.cliConsole = cliConsole;
+        this.cliProcess = cliConsole.Process;
+        this.voiceHandshake = voiceHandshake;
         this.micServeProcess = micServeProcess;
         this.scope = scope;
         Model = bareModel;
@@ -113,7 +117,7 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
 
     public bool IsActive => Volatile.Read(ref active) == 1 && !completionTcs.Task.IsCompleted;
 
-    public bool UsesExternalWindow => true;
+    public bool UsesExternalWindow => false;
 
     public string Model { get; }
 
@@ -125,7 +129,7 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
         string system,
         Action<string>? onStatus,
         CancellationToken ct) =>
-        StartCoreAsync(store, model, system, onStatus, createCliWindow: true, verifyAuthCatalog: true, ct);
+        StartCoreAsync(store, model, system, onStatus, verifyAuthCatalog: true, ct);
 
     internal static Task<AntigravityNativeTalkSession> StartForTestAsync(
         Store store,
@@ -134,18 +138,20 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
         Action<string>? onStatus,
         bool verifyAuthCatalog,
         CancellationToken ct) =>
-        StartCoreAsync(store, model, system, onStatus, createCliWindow: false, verifyAuthCatalog: verifyAuthCatalog, ct);
+        StartCoreAsync(store, model, system, onStatus, verifyAuthCatalog: verifyAuthCatalog, ct);
 
     private static async Task<AntigravityNativeTalkSession> StartCoreAsync(
         Store store,
         string model,
         string system,
         Action<string>? onStatus,
-        bool createCliWindow,
         bool verifyAuthCatalog,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(store);
+        if (store.Incognito) throw new InvalidOperationException(Loc.T(
+            "Antigravity native voice keeps its own conversation history. Turn off Incognito to use it.",
+            "صوت Antigravity الأصلي يحتفظ بسجل محادثة خاص به. أوقف الوضع الخفي لاستخدامه."));
         _ = system; // Interactive `agy` CLI does not expose a public system-prompt flag; tool isolation is enforced via `--settings`.
         ct.ThrowIfCancellationRequested();
 
@@ -192,6 +198,7 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
         VoiceSessionScope? scope = null;
         Process? micServeProcess = null;
         Process? cliProcess = null;
+        HiddenConsoleProcess? cliConsole = null;
         CancellationTokenSource? micReaderCts = null;
         Task? micStdoutTask = null;
         Task? micStderrTask = null;
@@ -241,56 +248,32 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
                     (detail.Length > 0 ? detail : $"exit code {micServeProcess.ExitCode}"));
             }
 
-            SafeNotifyStatus(onStatus, Loc.T(
-                "Opening external Antigravity CLI voice window…",
-                "جاري فتح نافذة Antigravity CLI الصوتية الخارجية…"));
-
-            var cliPsi = CreateInteractiveCliStartInfo(executable, scope, bareModel, micPort, createCliWindow);
-            cliProcess = Process.Start(cliPsi)
-                ?? throw new InvalidOperationException(Loc.T(
-                    "Could not open the external Antigravity CLI window.",
-                    "تعذّر فتح نافذة Antigravity CLI الخارجية."));
-
-            var cliExitTask = cliProcess.WaitForExitAsync(CancellationToken.None);
-            var cliInitWinner = await Task.WhenAny(
-                cliExitTask,
-                micExitTask,
-                Task.Delay(CliStartupStabilityDelay, ct)).ConfigureAwait(false);
-
+            SafeNotifyStatus(onStatus, Loc.T("Connecting Antigravity voice inside NIVO…", "جاري توصيل صوت Antigravity داخل نيڤو…"));
+            var handshake = new NativeVoiceHandshake();
+            var cliPsi = CreateInteractiveCliStartInfo(executable, scope, bareModel, micPort);
+            cliConsole = HiddenConsoleProcess.Start(cliPsi, handshake.Observe);
+            cliProcess = cliConsole.Process;
+            await NativeVoiceHandshake.WaitAsync(handshake.Ready, cliConsole, cliProcess, handshake.Ended, ct).ConfigureAwait(false);
+            // Let startup announcements finish before issuing the command. Only dismiss the provider's informational overlay.
+            await Task.Delay(600, ct).ConfigureAwait(false);
+            for (int notice = 0; notice < 3 && handshake.NeedsAnnouncementDismiss; notice++)
+            {
+                handshake.ClearAnnouncement();
+                await cliConsole.SendAsync("\u001b", ct).ConfigureAwait(false);
+                await Task.Delay(250, ct).ConfigureAwait(false);
+            }
+            handshake.BeginVoiceRequest();
+            await cliConsole.SendAsync("/voice live\r", ct).ConfigureAwait(false);
+            await NativeVoiceHandshake.WaitAsync(handshake.Started, cliConsole, cliProcess, handshake.Ended, ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
-
-            if (cliInitWinner == micExitTask || micServeProcess.HasExited)
-            {
-                string detail = ReadDiagnostics(micDiag, micDiagLock);
-                throw new InvalidOperationException(Loc.T(
-                    "Antigravity local audio bridge exited during launch: ",
-                    "توقف جسر الصوت المحلي لـ Antigravity أثناء التشغيل: ") +
-                    (detail.Length > 0 ? detail : $"exit code {micServeProcess.ExitCode}"));
-            }
-
-            if (cliInitWinner == cliExitTask || cliProcess.HasExited)
-            {
-                string logDetail = TryReadLogTail(scope.SessionLogPath);
-                throw new InvalidOperationException(Loc.T(
-                    "External Antigravity CLI exited immediately during startup: ",
-                    "أُغلقت نافذة Antigravity CLI الخارجية فورًا أثناء البدء: ") +
-                    (logDetail.Length > 0 ? logDetail : $"exit code {cliProcess.ExitCode}"));
-            }
-
+            if (micServeProcess.HasExited) throw new InvalidOperationException(Loc.T("The Antigravity audio connection stopped during startup.", "توقف اتصال صوت Antigravity أثناء البدء."));
             var session = new AntigravityNativeTalkSession(
-                cliProcess,
-                micServeProcess,
-                scope,
-                bareModel,
-                micPort,
-                micReaderCts,
-                micStdoutTask,
-                micStderrTask,
-                micDiag,
-                micDiagLock);
+                cliConsole, handshake, micServeProcess, scope, bareModel, micPort,
+                micReaderCts, micStdoutTask, micStderrTask, micDiag, micDiagLock);
 
             // Transfer ownership to the session instance; startup catch block must not tear them down now.
             cliProcess = null;
+            cliConsole = null;
             micServeProcess = null;
             scope = null;
             micReaderCts = null;
@@ -303,8 +286,8 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
             }
 
             SafeNotifyStatus(onStatus, Loc.T(
-                "Antigravity CLI opened (external window) · press F6 or type /voice live · tap Talk to stop",
-                "تم فتح Antigravity CLI في نافذة خارجية · اضغط F6 أو اكتب /voice live · اضغط Talk للإنهاء"));
+                "Antigravity voice connected · tap Talk again to end",
+                "تم توصيل صوت Antigravity · اضغط Talk مجددًا للإنهاء"));
 
             return session;
         }
@@ -315,7 +298,15 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
                 try { micReaderCts.Cancel(); } catch (ObjectDisposedException) { }
             }
 
-            await TerminateProcessSafelyAsync(cliProcess).ConfigureAwait(false);
+            if (cliConsole != null)
+            {
+                try { await cliConsole.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception cleanupError) when (cleanupError is IOException or InvalidOperationException or TimeoutException or Win32Exception)
+                {
+                    Trace.TraceWarning("NIVO voice startup console cleanup ended ({0}); continuing audio/profile cleanup.", cleanupError.GetType().Name);
+                }
+            }
+            else await TerminateProcessSafelyAsync(cliProcess).ConfigureAwait(false);
             await TerminateProcessSafelyAsync(micServeProcess).ConfigureAwait(false);
 
             if (micStdoutTask != null && micStderrTask != null)
@@ -352,14 +343,25 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
             var cliExitTask = cliProcess.WaitForExitAsync(monitorCts.Token);
             var micExitTask = micServeProcess.WaitForExitAsync(monitorCts.Token);
 
-            var winner = await Task.WhenAny(cliExitTask, micExitTask).ConfigureAwait(false);
+            var winner = await Task.WhenAny(cliExitTask, micExitTask, voiceHandshake.Ended, cliConsole.OutputCompleted).ConfigureAwait(false);
             if (Volatile.Read(ref localStopRequested) != 0 || monitorCts.IsCancellationRequested)
             {
                 _ = BeginShutdownAsync(fault: null, localStop: true);
                 return;
             }
 
-            if (winner == cliExitTask)
+            if (winner == voiceHandshake.Ended)
+            {
+                _ = BeginShutdownAsync(await voiceHandshake.Ended.ConfigureAwait(false), localStop: false);
+                return;
+            }
+            if (winner == cliConsole.OutputCompleted && !cliProcess.HasExited)
+            {
+                await cliConsole.OutputCompleted.ConfigureAwait(false);
+                _ = BeginShutdownAsync(new IOException("The internal voice connection closed unexpectedly."), localStop: false);
+                return;
+            }
+            if (winner == cliExitTask || cliProcess.HasExited)
             {
                 int exitCode = 0;
                 try { exitCode = cliProcess.ExitCode; } catch (InvalidOperationException) { }
@@ -369,8 +371,8 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
                 {
                     string detail = TryReadLogTail(scope.SessionLogPath);
                     fault = new InvalidOperationException(Loc.T(
-                        "External Antigravity CLI exited unexpectedly: ",
-                        "أُغلقت نافذة Antigravity CLI الخارجية بشكل غير متوقع: ") +
+                        "Antigravity voice connection exited unexpectedly: ",
+                        "أُغلق اتصال صوت Antigravity بشكل غير متوقع: ") +
                         (detail.Length > 0 ? detail : $"exit code {exitCode}"));
                 }
 
@@ -445,7 +447,9 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
             try { await Task.WhenAll(micStdoutTask, micStderrTask).WaitAsync(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false); }
             catch (Exception ex) when (ex is TimeoutException or OperationCanceledException or IOException or InvalidOperationException) { }
 
-            cliProcess.Dispose();
+            try { await cliConsole.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or TimeoutException)
+            { fault ??= ex; Trace.TraceWarning("NIVO voice transport cleanup failed ({0}).", ex.GetType().Name); }
             micServeProcess.Dispose();
             monitorCts.Dispose();
             micReaderCts.Dispose();
@@ -549,14 +553,13 @@ public sealed partial class AntigravityNativeTalkSession : IAccountTalkSession
         string executable,
         VoiceSessionScope scope,
         string bareModel,
-        int micPort,
-        bool createCliWindow)
+        int micPort)
     {
         var psi = new ProcessStartInfo(executable)
         {
             WorkingDirectory = scope.WorkspaceDir,
             UseShellExecute = false,
-            CreateNoWindow = !createCliWindow,
+            CreateNoWindow = true,
             RedirectStandardInput = false,
             RedirectStandardOutput = false,
             RedirectStandardError = false

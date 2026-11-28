@@ -63,7 +63,7 @@ Requires **Windows 10 version 2004 or newer, or Windows 11, 64-bit**. AI feature
 
 **Start with Windows:** open **Settings → Desktop**, enable **Start NIVO with Windows**, and save. No Administrator access needed. If you move the EXE, turn the option off and save, then enable it again to update its location.
 
-**Voice:** Talk uses the available connected account. Codex voice is experimental. Antigravity opens its native window—press **F6** there to begin. Press Talk again to stop.
+**Voice:** Talk uses the available connected account. Native voice is experimental and can be unavailable even when text and images work. Antigravity starts inside NIVO with no terminal window or manual keypress, after its model finishes loading. Press Talk again to stop or cancel connection. Native voice depends on account availability; Antigravity transcripts are not mirrored into NIVO chat. Its native session keeps separate provider history, so it is unavailable in Incognito.
 
 ## Your data, your choices
 

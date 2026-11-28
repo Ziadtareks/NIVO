@@ -22,9 +22,26 @@ if (args.Contains("mic-serve") || args.Contains("--settings"))
         if (!File.Exists(linked) || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SSH_CONNECTION")) ||
             !(Environment.GetEnvironmentVariable("ANTIGRAVITY_MIC") ?? "").StartsWith("127.0.0.1:")) return;
         File.WriteAllText(Path.Combine(Environment.CurrentDirectory, "verified"), "No hardware used");
+        File.WriteAllText(Path.Combine(Environment.CurrentDirectory, "console-state.json"), JsonSerializer.Serialize(new {
+            redirectedInput = Console.IsInputRedirected, redirectedOutput = Console.IsOutputRedirected,
+            visible = TerminalVisibility.IsWindowVisible(TerminalVisibility.GetConsoleWindow()) }));
+        Console.WriteLine("? for shortcuts");
+        // Native startup paints an empty prompt before the model/backend is ready.
+        await Task.Delay(900);
+        Console.WriteLine("? for shortcuts                         Fixture model · ready");
+        string? command = Console.ReadLine();
+        if (command != "/voice live") throw new Exception("The private terminal did not receive the exact voice-start command");
+        File.WriteAllText(Path.Combine(Environment.CurrentDirectory, "voice-started"), command);
+        if (Environment.GetEnvironmentVariable("NIVO_FIXTURE_VOICE_FAIL") == "1") Console.WriteLine("Live mode isn't available in this session.");
+        else Console.WriteLine("Started voice chat · fixture");
     }
     for (int tick = 0; tick < 2400; tick++)
     {
+        if (!bridge && File.Exists(Path.Combine(Environment.CurrentDirectory, "stop-voice")))
+        {
+            File.Delete(Path.Combine(Environment.CurrentDirectory, "stop-voice"));
+            Console.WriteLine("Stopped voice chat · fixture");
+        }
         if (File.Exists(Path.Combine(Environment.CurrentDirectory, bridge ? "crash-bridge" : "close-cli")))
         { Environment.ExitCode = bridge ? 3 : 0; return; }
         await Task.Delay(50);
@@ -210,3 +227,9 @@ if (commandText.Contains("FIXTURE_IMAGE_PLAN"))
 }
 Console.WriteLine(JsonSerializer.Serialize(new { type = "text", part = new { text = "NIVO_" } }));
 Console.WriteLine(JsonSerializer.Serialize(new { type = "text", part = new { text = "READY" } }));
+
+internal static class TerminalVisibility
+{
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")] internal static extern IntPtr GetConsoleWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")] [return:System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)] internal static extern bool IsWindowVisible(IntPtr window);
+}

@@ -4,7 +4,7 @@ NIVO's own source is MIT-licensed. Third-party components retain their own licen
 
 ## Resolved packages and bundled components
 
-The inventory below was read from the actual 1.9.0 single-file dependency manifest, cached NuGet `.nuspec` metadata, and the exact package/upstream license files. [The manifest](licenses/manifest.json) records metadata sources, package hashes, pinned source revisions and license-file hashes. Framework/host versions are distribution versions, not guessed component versions.
+The inventory below was read from the actual 1.9.0 single-file dependency manifest, cached NuGet `.nuspec` metadata, and the exact package/upstream license files. [The manifest](licenses/manifest.json) records metadata sources, package hashes, pinned source revisions and license-file hashes. Framework/host versions are distribution versions, not guessed component versions. The 1.10.0 release dependency manifest was compared against that audited inventory: all 13 bundled dependency/runtime versions are unchanged.
 
 | Component | Version | License | Link to the license text |
 |---|---|---|---|
